@@ -1,4 +1,4 @@
-# SDK to create and send UserOperation 
+# SDK to create and send UserOperation
 
 This package provides 2 APIs for using UserOperations:
 
@@ -19,7 +19,7 @@ An implementation of the BaseWalletAPI, for the SimpleWallet sample of account-a
 ```typescript
 owner = provider.getSigner()
 const walletAPI = new SimpleAccountAPI({
-    provider, 
+    provider,
     entryPointAddress,
     owner,
     factoryAddress
@@ -32,7 +32,7 @@ const op = await walletAPI.createSignedUserOp({
 
 ## High-Level Provider API
 
-A simplified mode that doesn't require a different wallet extension. 
+A simplified mode that doesn't require a different wallet extension.
 Instead, the current provider's account is used as wallet owner by calling its "Sign Message" operation.
 
 This can only work for wallets that use an EIP-191 ("Ethereum Signed Message") signature (like our sample SimpleWallet)
@@ -46,8 +46,10 @@ const aaSigner = provider.getSigner()
 const config = {
   chainId: await provider.getNetwork().then(net => net.chainId),
   entryPointAddress,
-  bundlerUrl: 'http://localhost:3000/rpc'
-} 
+  bundlerUrl: 'http://localhost:3000/rpc',
+  factoryAddress,  // You need to provide either factoryAddress or factoryManagerAddress
+  factoryManagerAddress  // Optional, but needed if factoryAddress is not provided
+}
 const aaProvider = await wrapProvider(provider, config, aaSigner)
 const walletAddress = await aaProvider.getSigner().getAddress()
 
@@ -59,3 +61,6 @@ const myContract = new Contract(abi, aaProvider)
 await myContract.someMethod()
 ```
 
+### Configuration Note:
+- When using the **high-level provider API**, you **must** provide either the `factoryAddress` (pre-deployed factory contract) or the `factoryManagerAddress` (to fetch the `factoryAddress` dynamically).
+- If both are missing, an error will be thrown during initialization.

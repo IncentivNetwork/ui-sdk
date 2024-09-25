@@ -1,26 +1,42 @@
 import { PaymasterAPI } from './PaymasterAPI'
 
 /**
- * configuration params for wrapProvider
+ * Configuration params for wrapProvider
  */
 export interface ClientConfig {
   /**
-   * the entry point to use
+   * The entry point to use
    */
   entryPointAddress: string
+
   /**
-   * url to the bundler
+   * URL to the bundler
    */
   bundlerUrl: string
+
   /**
-   * if set, use this pre-deployed wallet.
-   * (if not set, use getSigner().getAddress() to query the "counterfactual" address of wallet.
-   *  you may need to fund this address so the wallet can pay for its own creation)
+   * If set, use this pre-deployed wallet.
+   * (If not set, use getSigner().getAddress() to query the "counterfactual" address of the wallet.
+   *  You may need to fund this address so the wallet can pay for its own creation)
    */
   walletAddress?: string
 
   /**
-   * if set, call just before signing.
+   * If set, call just before signing.
    */
   paymasterAPI?: PaymasterAPI
+
+  /**
+   * The address of the factory contract that will deploy the account contract.
+   * If this is provided, it will be used directly.
+   * If not provided, the factory address will be fetched from the factory manager contract.
+   */
+  factoryAddress?: string
+
+  /**
+   * The address of the factory manager contract, which provides the factoryAddress.
+   * This is used to dynamically fetch the factory address if the factoryAddress is not explicitly provided.
+   * If both factoryAddress and factoryManagerAddress are not provided, an error will be thrown.
+   */
+  factoryManagerAddress?: string
 }
