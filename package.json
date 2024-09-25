@@ -16,7 +16,7 @@
     "hardhat-test": "hardhat test",
     "tsc": "tsc",
     "watch-tsc": "tsc -w --preserveWatchOutput",
-    "prepare": "tsc"
+    "prepare": "npm install --ignore-scripts && tsc"
   },
   "dependencies": {
     "@account-abstraction/contracts": "^0.6.0",
