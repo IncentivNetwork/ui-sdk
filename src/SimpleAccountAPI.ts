@@ -9,6 +9,12 @@ import { arrayify, hexConcat, Interface } from 'ethers/lib/utils'
 import { Signer } from '@ethersproject/abstract-signer'
 import { BaseApiParams, BaseAccountAPI } from './BaseAccountAPI'
 
+function hasPublicKey(obj: any): obj is { publicKey: { x: string; y: string } } {
+  return obj && obj.publicKey &&
+         typeof obj.publicKey.x === 'string' &&
+         typeof obj.publicKey.y === 'string';
+}
+
 /**
  * constructor params, added no top of base params:
  * @param owner the signer object for the account owner
@@ -72,7 +78,7 @@ export class SimpleAccountAPI extends BaseAccountAPI {
     let walletIdentifier: any
 
     // Check if the owner has a publicKey property
-    if ((this.owner as any).publicKey) {
+    if (hasPublicKey(this.owner as any)) {
       const publicKey = (this.owner as any).publicKey;
 
       // If publicKey is present, use the ABI for publicKey
