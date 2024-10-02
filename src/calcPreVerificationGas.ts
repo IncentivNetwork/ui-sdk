@@ -48,7 +48,7 @@ export const DefaultGasOverheads: GasOverheads = {
   zeroByte: 4,
   nonZeroByte: 16,
   bundleSize: 1,
-  sigSize: 65
+  sigSize: 536
 }
 
 /**
