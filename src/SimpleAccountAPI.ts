@@ -72,7 +72,7 @@ export class SimpleAccountAPI extends BaseAccountAPI {
     let walletIdentifier: any
 
     // Check if the owner has a publicKey property
-    if ((this.owner as { publicKey?: { x: string; y: string } }).publicKey) {
+    if ((this.owner as any).publicKey) {
       const publicKey = (this.owner as any).publicKey;
 
       // If publicKey is present, use the ABI for publicKey
@@ -96,7 +96,7 @@ export class SimpleAccountAPI extends BaseAccountAPI {
     const createAccountInterface = new Interface(createAccountAbi);
 
     // Encode function data using the ABI and parameters
-    const encodedFunctionData = createAccountInterface.encodeFunctionData('createAccount', [walletIdentifier]);
+    const encodedFunctionData = createAccountInterface.encodeFunctionData('createAccount', walletIdentifier);
 
     return hexConcat([
       this.factory.address,
