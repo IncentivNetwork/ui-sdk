@@ -5,9 +5,15 @@ import {
   SimpleAccountFactory__factory
 } from '@account-abstraction/contracts'
 
-import { arrayify, hexConcat } from 'ethers/lib/utils'
+import { arrayify, hexConcat, Interface } from 'ethers/lib/utils'
 import { Signer } from '@ethersproject/abstract-signer'
 import { BaseApiParams, BaseAccountAPI } from './BaseAccountAPI'
+
+function hasPublicKey(obj: any): obj is { publicKey: { x: string; y: string } } {
+  return obj && obj.publicKey &&
+         typeof obj.publicKey.x === 'string' &&
+         typeof obj.publicKey.y === 'string';
+}
 
 /**
  * constructor params, added no top of base params:
@@ -19,7 +25,6 @@ export interface SimpleAccountApiParams extends BaseApiParams {
   owner: Signer
   factoryAddress?: string
   index?: BigNumberish
-
 }
 
 /**
@@ -68,10 +73,44 @@ export class SimpleAccountAPI extends BaseAccountAPI {
         throw new Error('no factory to get initCode')
       }
     }
+
+    let createAccountAbi: string[]
+    let createAccountParams: any
+
+    // Check if the owner has a publicKey property
+    if (hasPublicKey(this.owner as any)) {
+      const publicKey = (this.owner as any).publicKey;
+
+      // If publicKey is present, use the ABI for `createAccount` with a public key
+      createAccountAbi = [
+        "function createAccount(bytes32[2] memory publicKey) external payable returns (SimpleAccount)"
+      ]
+      // Provide the public key as an array of two 32-byte hex strings
+      createAccountParams = [[
+        publicKey.x, // Hex string for public key's X coordinate
+        publicKey.y // Hex string for public key's Y coordinate
+      ]];
+    } else {
+      // Fetch the owner address only if the publicKey is not present
+      const ownerAddress = await this.owner.getAddress();
+
+      // Otherwise, use the ABI for owner address and index
+      createAccountAbi = [
+        "function createAccount(address owner, uint256 index) external payable returns (SimpleAccount)"
+      ]
+      createAccountParams = [ownerAddress, this.index]
+    }
+
+    // Create ethers Interface using the appropriate ABI
+    const createAccountInterface = new Interface(createAccountAbi);
+
+    // Encode function data using the ABI and parameters
+    const encodedFunctionData = createAccountInterface.encodeFunctionData('createAccount', createAccountParams);
+
     return hexConcat([
       this.factory.address,
-      this.factory.interface.encodeFunctionData('createAccount', [await this.owner.getAddress(), this.index])
-    ])
+      encodedFunctionData
+    ]);
   }
 
   async getNonce (): Promise<BigNumber> {
