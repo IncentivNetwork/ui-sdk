@@ -1,18 +1,19 @@
 import { BigNumber, BigNumberish } from 'ethers'
+import {AddressZero, HashZero} from "@ethersproject/constants"
 import {
   SimpleAccount,
   SimpleAccount__factory, SimpleAccountFactory,
   SimpleAccountFactory__factory
 } from '@account-abstraction/contracts'
 
-import { arrayify, hexConcat, Interface } from 'ethers/lib/utils'
+import { arrayify, hexlify, zeroPad, hexConcat, Interface } from 'ethers/lib/utils'
 import { Signer } from '@ethersproject/abstract-signer'
 import { BaseApiParams, BaseAccountAPI } from './BaseAccountAPI'
 
-function hasPublicKey(obj: any): obj is { publicKey: { x: string; y: string } } {
-  return obj && obj.publicKey &&
-         typeof obj.publicKey.x === 'string' &&
-         typeof obj.publicKey.y === 'string';
+function hasPublicKey(owner: any): owner is { publicKey: { x: string; y: string } } {
+  return owner && owner.publicKey &&
+         typeof owner.publicKey.x === 'string' &&
+         typeof owner.publicKey.y === 'string'
 }
 
 /**
@@ -65,52 +66,54 @@ export class SimpleAccountAPI extends BaseAccountAPI {
    * return the value to put into the "initCode" field, if the account is not yet deployed.
    * this value holds the "factory" address, followed by this account's information
    */
+
   async getAccountInitCode (): Promise<string> {
-    if (this.factory == null) {
-      if (this.factoryAddress != null && this.factoryAddress !== '') {
+    if (!this.factory) {
+      if (this.factoryAddress) {
         this.factory = SimpleAccountFactory__factory.connect(this.factoryAddress, this.provider)
       } else {
-        throw new Error('no factory to get initCode')
+        throw new Error('No factory to get initCode')
       }
     }
 
-    let createAccountAbi: string[]
+    const createAccountAbi = [
+      'function createAccount(address owner, bytes32[2] memory publicKey, uint256 salt) external payable returns (SimpleAccount)',
+    ]
+
     let createAccountParams: any
 
-    // Check if the owner has a publicKey property
+    // Check if the owner has a publicKey property (indicating a Passkey account)
     if (hasPublicKey(this.owner as any)) {
-      const publicKey = (this.owner as any).publicKey;
+      const publicKey = (this.owner as any).publicKey
 
-      // If publicKey is present, use the ABI for `createAccount` with a public key
-      createAccountAbi = [
-        "function createAccount(bytes32[2] memory publicKey) external payable returns (SimpleAccount)"
-      ]
-      // Provide the public key as an array of two 32-byte hex strings
-      createAccountParams = [[
-        publicKey.x, // Hex string for public key's X coordinate
-        publicKey.y // Hex string for public key's Y coordinate
-      ]];
+      // Provide the public key and set owner to zero address
+      createAccountParams = [
+        AddressZero,
+        [
+          publicKey.x, // Hex string for public key's X coordinate
+          publicKey.y // Hex string for public key's Y coordinate
+        ],
+        this.index
+      ];
     } else {
-      // Fetch the owner address only if the publicKey is not present
-      const ownerAddress = await this.owner.getAddress();
+      // Fetch the owner address (EOA account)
+      const ownerAddress = await this.owner.getAddress()
 
-      // Otherwise, use the ABI for owner address and index
-      createAccountAbi = [
-        "function createAccount(address owner, uint256 index) external payable returns (SimpleAccount)"
+      // Provide owner address and set publicKey to zeros
+      createAccountParams = [
+        ownerAddress,
+        [HashZero, HashZero],
+        this.index
       ]
-      createAccountParams = [ownerAddress, this.index]
     }
 
-    // Create ethers Interface using the appropriate ABI
-    const createAccountInterface = new Interface(createAccountAbi);
+    // Create ethers Interface using the ABI
+    const createAccountInterface = new Interface(createAccountAbi)
 
     // Encode function data using the ABI and parameters
-    const encodedFunctionData = createAccountInterface.encodeFunctionData('createAccount', createAccountParams);
+    const encodedFunctionData = createAccountInterface.encodeFunctionData('createAccount', createAccountParams)
 
-    return hexConcat([
-      this.factory.address,
-      encodedFunctionData
-    ]);
+    return hexConcat([this.factory.address, encodedFunctionData])
   }
 
   async getNonce (): Promise<BigNumber> {
@@ -139,6 +142,11 @@ export class SimpleAccountAPI extends BaseAccountAPI {
   }
 
   async signUserOpHash (userOpHash: string): Promise<string> {
-    return await this.owner.signMessage(arrayify(userOpHash))
+    const signedMessage = await this.owner.signMessage(arrayify(userOpHash))
+    const versionBytes = zeroPad(
+      hexlify(hasPublicKey(this.owner) ? 1 : 0),
+      1 // Zero-pad to 1 byte
+    )
+    return hexConcat([versionBytes, signedMessage])
   }
 }
