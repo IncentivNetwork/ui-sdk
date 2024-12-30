@@ -53,13 +53,45 @@ export class HttpRpcClient {
    * @param userOp1
    * @returns latest gas suggestions made by the bundler.
    */
-  async estimateUserOpGas (userOp1: Partial<UserOperationStruct>): Promise<{callGasLimit: number, preVerificationGas: number, verificationGas: number}> {
-    await this.initializing
-    const hexifiedUserOp = deepHexlify(await resolveProperties(userOp1))
-    const jsonRequestData: [UserOperationStruct, string] = [hexifiedUserOp, this.entryPointAddress]
-    await this.printUserOperation('eth_estimateUserOperationGas', jsonRequestData)
-    return await this.userOpJsonRpcProvider
-      .send('eth_estimateUserOperationGas', [hexifiedUserOp, this.entryPointAddress])
+  async estimateUserOpGas(userOp1: Partial<UserOperationStruct>): Promise<{
+    callGasLimit: number
+    preVerificationGas: number
+    verificationGas: number
+    success: boolean
+  }> {
+    try {
+      await this.initializing
+      const hexifiedUserOp = deepHexlify(await resolveProperties(userOp1))
+
+      debug('Sending estimation request: %o', {
+        sender: hexifiedUserOp.sender,
+        nonce: hexifiedUserOp.nonce,
+        initCode: hexifiedUserOp.initCode?.length > 2 ? 'present' : 'none',
+        callData: hexifiedUserOp.callData?.length > 2 ? 'present' : 'none'
+      })
+
+      const result = await this.userOpJsonRpcProvider
+        .send('eth_estimateUserOperationGas', [hexifiedUserOp, this.entryPointAddress])
+        .catch(error => {
+          debug('Estimation failed: %s', error instanceof Error ? error.message : 'Unknown error')
+          throw error
+        })
+
+      debug('Estimation response: %o', result)
+      return {
+        ...result,
+        success: true
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      debug('Estimation error: %s', errorMessage)
+      return {
+        callGasLimit: 0,
+        preVerificationGas: 0,
+        verificationGas: 0,
+        success: false
+      }
+    }
   }
 
   private async printUserOperation (method: string, [userOp1, entryPointAddress]: [UserOperationStruct, string]): Promise<void> {

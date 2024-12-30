@@ -57,18 +57,20 @@ export async function wrapProvider (
     }
   }
 
+  const chainId = await originalProvider.getNetwork().then(net => net.chainId)
+  const httpRpcClient = new HttpRpcClient(config.bundlerUrl, config.entryPointAddress, chainId)
+
   // Initialize SimpleAccountAPI with the resolved factoryAddress
   const smartAccountAPI = new SimpleAccountAPI({
     provider: originalProvider,
     entryPointAddress: entryPoint.address,
     owner: originalSigner,
     factoryAddress,  // Use resolved factoryAddress
-    paymasterAPI: config.paymasterAPI
+    paymasterAPI: config.paymasterAPI,
+    httpRpcClient    // Add httpRpcClient
   })
 
   debug('config=', config)
-  const chainId = await originalProvider.getNetwork().then(net => net.chainId)
-  const httpRpcClient = new HttpRpcClient(config.bundlerUrl, config.entryPointAddress, chainId)
 
   // Return the initialized ERC4337EthersProvider
   return await new ERC4337EthersProvider(

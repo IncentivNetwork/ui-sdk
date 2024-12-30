@@ -8,6 +8,9 @@ import { ClientConfig } from './ClientConfig'
 import { HttpRpcClient } from './HttpRpcClient'
 import { UserOperationStruct } from '@account-abstraction/contracts'
 import { BaseAccountAPI } from './BaseAccountAPI'
+import Debug from 'debug'
+
+const debug = Debug('aa.signer')
 
 export class ERC4337EthersSigner extends Signer {
   // TODO: we have 'erc4337provider', remove shared dependencies or avoid two-way reference
@@ -27,12 +30,33 @@ export class ERC4337EthersSigner extends Signer {
   async sendTransaction (transaction: Deferrable<TransactionRequest>): Promise<TransactionResponse> {
     const tx: TransactionRequest = await this.populateTransaction(transaction)
     await this.verifyAllNecessaryFields(tx)
-    const userOperation = await this.smartAccountAPI.createSignedUserOp({
+
+    // Check if gasLimit was explicitly set in the original transaction
+    const originalGasLimit = (transaction as any).gasLimit
+    const isGasLimitExplicit = originalGasLimit !== undefined && originalGasLimit !== null
+
+    debug('Gas limit details: %o', {
+      originalGasLimit: originalGasLimit?.toString() ?? 'not set',
+      populatedGasLimit: tx.gasLimit?.toString() ?? 'not set',
+      isExplicitlySet: isGasLimitExplicit
+    })
+
+    // Only pass gasLimit if it was explicitly set in the original transaction
+    const userOpDetails = {
       target: tx.to ?? '',
       data: tx.data?.toString() ?? '',
       value: tx.value,
-      gasLimit: tx.gasLimit
+      ...(isGasLimitExplicit && { gasLimit: tx.gasLimit })
+    }
+
+    debug('Creating UserOp with details: %o', {
+      target: userOpDetails.target,
+      hasData: !!userOpDetails.data && userOpDetails.data !== '0x',
+      hasValue: !!userOpDetails.value && userOpDetails.value !== '0x',
+      gasLimitIncluded: 'gasLimit' in userOpDetails
     })
+
+    const userOperation = await this.smartAccountAPI.createSignedUserOp(userOpDetails)
     const transactionResponse = await this.erc4337provider.constructUserOpTransactionResponse(userOperation)
     try {
       await this.httpRpcClient.sendUserOpToBundler(userOperation)
