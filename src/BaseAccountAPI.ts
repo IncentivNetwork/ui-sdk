@@ -10,6 +10,11 @@ import { resolveProperties } from 'ethers/lib/utils'
 import { PaymasterAPI } from './PaymasterAPI'
 import { getUserOpHash, NotPromise, packUserOp } from '@account-abstraction/utils'
 import { calcPreVerificationGas, GasOverheads } from './calcPreVerificationGas'
+import { SignatureMode } from './SignatureMode'
+import { HttpRpcClient } from './HttpRpcClient'
+import Debug from 'debug'
+
+const debug = Debug('aa.base')
 
 export interface BaseApiParams {
   provider: Provider
@@ -17,6 +22,7 @@ export interface BaseApiParams {
   accountAddress?: string
   overheads?: Partial<GasOverheads>
   paymasterAPI?: PaymasterAPI
+  httpRpcClient: HttpRpcClient
 }
 
 export interface UserOpResult {
@@ -43,6 +49,8 @@ export abstract class BaseAccountAPI {
   // entryPoint connected to "zero" address. allowed to make static calls (e.g. to getSenderAddress)
   private readonly entryPointView: EntryPoint
 
+  readonly httpRpcClient: HttpRpcClient
+
   provider: Provider
   overheads?: Partial<GasOverheads>
   entryPointAddress: string
@@ -59,6 +67,7 @@ export abstract class BaseAccountAPI {
     this.entryPointAddress = params.entryPointAddress
     this.accountAddress = params.accountAddress
     this.paymasterAPI = params.paymasterAPI
+    this.httpRpcClient = params.httpRpcClient
 
     // factory "connect" define the contract address. the contract "connect" defines the "from" address.
     this.entryPointView = EntryPoint__factory.connect(params.entryPointAddress, params.provider).connect(ethers.constants.AddressZero)
@@ -150,7 +159,9 @@ export abstract class BaseAccountAPI {
    * NOTE: createUnsignedUserOp will add to this value the cost of creation, if the contract is not yet created.
    */
   async getVerificationGasLimit (): Promise<BigNumberish> {
-    return 500000
+    const signatureMode = this.getSignatureMode()
+    // Passkey signatures require more verification gas
+    return signatureMode === SignatureMode.PASSKEY ? 500000 : 100000
   }
 
   /**
@@ -159,7 +170,12 @@ export abstract class BaseAccountAPI {
    */
   async getPreVerificationGas (userOp: Partial<UserOperationStruct>): Promise<number> {
     const p = await resolveProperties(userOp)
-    return calcPreVerificationGas(p, this.overheads)
+    const signatureMode = this.getSignatureMode()
+    debug('PreVerificationGas using signature mode: %s', signatureMode)
+    return calcPreVerificationGas(p, {
+      ...this.overheads,
+      signatureMode
+    })
   }
 
   /**
@@ -178,15 +194,74 @@ export abstract class BaseAccountAPI {
     const value = parseNumber(detailsForUserOp.value) ?? BigNumber.from(0)
     const callData = await this.encodeExecute(detailsForUserOp.target, value, detailsForUserOp.data)
 
-    const callGasLimit = parseNumber(detailsForUserOp.gasLimit) ?? await this.provider.estimateGas({
-      from: this.entryPointAddress,
-      to: this.getAccountAddress(),
-      data: callData
+    debug('Starting estimation for: %o', {
+      type: !detailsForUserOp.data || detailsForUserOp.data === '0x' ? 'Simple Transfer' : 'Contract Interaction',
+      target: detailsForUserOp.target,
+      value: value.toString(),
+      hasCallData: !!detailsForUserOp.data && detailsForUserOp.data !== '0x'
+    })
+
+    // Log transaction details in a cleaner format
+    debug('Transaction details: %o', {
+      target: detailsForUserOp.target,
+      value: value.toString(),
+      data: detailsForUserOp.data === '0x' ? 'none' : 'present',
+      signatureMode: this.getSignatureMode()
+    })
+
+    // If user provided gas limit, use it
+    if (detailsForUserOp.gasLimit) {
+      debug('Using provided gas limit: %s', detailsForUserOp.gasLimit.toString())
+      return {
+        callData,
+        callGasLimit: BigNumber.from(detailsForUserOp.gasLimit)
+      }
+    }
+
+    debug('Using bundler estimation...')
+    const initCode = await this.getInitCode()
+    const verificationGasLimit = await this.getVerificationGasLimit()
+
+    debug('Preparing bundler estimation: %o', {
+      signatureMode: this.getSignatureMode(),
+      requestedVerificationGas: verificationGasLimit.toString()
+    })
+
+    const partialOp = {
+      sender: await this.getAccountAddress(),
+      nonce: await this.getNonce(),
+      initCode,
+      callData,
+      callGasLimit: 0,
+      verificationGasLimit,
+      maxFeePerGas: 0,
+      maxPriorityFeePerGas: 0,
+      paymasterAndData: '0x',
+      signature: '0x'
+    }
+
+    const bundlerEstimation = await this.httpRpcClient.estimateUserOpGas(partialOp)
+
+    if (!bundlerEstimation.success) {
+      throw new Error('Bundler gas estimation failed')
+    }
+
+    debug('Bundler estimation details: %o', {
+      signatureMode: this.getSignatureMode(),
+      requestedVerificationGas: verificationGasLimit.toString(),
+      bundlerVerificationGas: bundlerEstimation.verificationGas.toString(),
+      callGasLimit: bundlerEstimation.callGasLimit.toString(),
+      preVerificationGas: bundlerEstimation.preVerificationGas.toString(),
+      totalGas: (
+        Number(bundlerEstimation.verificationGas) +
+        Number(bundlerEstimation.callGasLimit) +
+        Number(bundlerEstimation.preVerificationGas)
+      ).toString()
     })
 
     return {
       callData,
-      callGasLimit
+      callGasLimit: BigNumber.from(bundlerEstimation.callGasLimit)
     }
   }
 
@@ -322,4 +397,10 @@ export abstract class BaseAccountAPI {
     }
     return null
   }
+
+  /**
+   * Get the signature mode for the current account
+   * This should be implemented by derived classes
+   */
+  abstract getSignatureMode(): SignatureMode
 }

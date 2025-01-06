@@ -9,12 +9,8 @@ import {
 import { arrayify, hexlify, zeroPad, hexConcat, Interface } from 'ethers/lib/utils'
 import { Signer } from '@ethersproject/abstract-signer'
 import { BaseApiParams, BaseAccountAPI } from './BaseAccountAPI'
-
-function hasPublicKey(owner: any): owner is { publicKey: { x: string; y: string } } {
-  return owner && owner.publicKey &&
-         typeof owner.publicKey.x === 'string' &&
-         typeof owner.publicKey.y === 'string'
-}
+import { SignatureMode } from './SignatureMode'
+import { hasPublicKey } from './utils'
 
 /**
  * constructor params, added no top of base params:
@@ -148,5 +144,12 @@ export class SimpleAccountAPI extends BaseAccountAPI {
       1 // Zero-pad to 1 byte
     )
     return hexConcat([versionBytes, signedMessage])
+  }
+
+  /**
+   * Get the signature mode based on the owner type
+   */
+  getSignatureMode(): SignatureMode {
+    return hasPublicKey(this.owner) ? SignatureMode.PASSKEY : SignatureMode.EOA
   }
 }
