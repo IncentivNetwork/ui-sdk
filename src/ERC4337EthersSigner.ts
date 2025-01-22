@@ -2,7 +2,7 @@ import { Deferrable, defineReadOnly } from '@ethersproject/properties'
 import { Provider, TransactionRequest, TransactionResponse } from '@ethersproject/providers'
 import { Signer } from '@ethersproject/abstract-signer'
 
-import { Bytes } from 'ethers'
+import { Bytes, BigNumber, BigNumberish } from 'ethers'
 import { ERC4337EthersProvider } from './ERC4337EthersProvider'
 import { ClientConfig } from './ClientConfig'
 import { HttpRpcClient } from './HttpRpcClient'
@@ -11,6 +11,15 @@ import { BaseAccountAPI } from './BaseAccountAPI'
 import Debug from 'debug'
 
 const debug = Debug('aa.signer')
+
+export interface BatchTransactionRequest {
+  targets: string[]
+  datas: string[]
+  values: BigNumberish[]
+  gasLimit?: BigNumberish
+  maxFeePerGas?: BigNumberish
+  maxPriorityFeePerGas?: BigNumberish
+}
 
 export class ERC4337EthersSigner extends Signer {
   // TODO: we have 'erc4337provider', remove shared dependencies or avoid two-way reference
@@ -97,6 +106,55 @@ export class ERC4337EthersSigner extends Signer {
       // TBD: banning no-op UserOps seems to make sense on provider level
       throw new Error('Missing call data or value')
     }
+  }
+
+  async verifyAllNecessaryBatchFields (batchRequest: BatchTransactionRequest): Promise<void> {
+    if (batchRequest.targets.length === 0) {
+      throw new Error('Empty batch request')
+    }
+    if (batchRequest.targets.length !== batchRequest.datas.length || batchRequest.targets.length !== batchRequest.values.length) {
+      throw new Error('Batch arrays must have the same length')
+    }
+    for (const target of batchRequest.targets) {
+      if (target == null) {
+        throw new Error('Missing call target in batch')
+      }
+    }
+  }
+
+  /**
+   * Send a batch of transactions
+   */
+  async sendBatchTransaction(batchRequest: BatchTransactionRequest): Promise<TransactionResponse> {
+    await this.verifyAllNecessaryBatchFields(batchRequest)
+
+    // Convert values to BigNumber and ensure they're in the correct format
+    const convertedRequest = {
+      targets: batchRequest.targets,
+      datas: batchRequest.datas.map(d => d || '0x'),
+      values: batchRequest.values.map(v => BigNumber.from(v || 0)),
+      gasLimit: batchRequest.gasLimit ? BigNumber.from(batchRequest.gasLimit) : undefined,
+      maxFeePerGas: batchRequest.maxFeePerGas ? BigNumber.from(batchRequest.maxFeePerGas) : undefined,
+      maxPriorityFeePerGas: batchRequest.maxPriorityFeePerGas ? BigNumber.from(batchRequest.maxPriorityFeePerGas) : undefined
+    }
+
+    const userOpDetails = {
+      targets: convertedRequest.targets,
+      datas: convertedRequest.datas,
+      values: convertedRequest.values,
+      ...(batchRequest.gasLimit !== undefined && { gasLimit: convertedRequest.gasLimit }),
+      maxFeePerGas: convertedRequest.maxFeePerGas,
+      maxPriorityFeePerGas: convertedRequest.maxPriorityFeePerGas
+    }
+
+    const userOperation = await this.smartAccountAPI.createSignedBatchUserOp(userOpDetails)
+    const transactionResponse = await this.erc4337provider.constructUserOpTransactionResponse(userOperation)
+    try {
+      await this.httpRpcClient.sendUserOpToBundler(userOperation)
+    } catch (error: any) {
+      throw this.unwrapError(error)
+    }
+    return transactionResponse
   }
 
   connect (provider: Provider): Signer {

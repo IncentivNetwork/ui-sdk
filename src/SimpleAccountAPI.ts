@@ -137,6 +137,19 @@ export class SimpleAccountAPI extends BaseAccountAPI {
       ])
   }
 
+  /**
+   * encode a batch of method calls from entryPoint to our contract
+   * @param targets array of target addresses
+   * @param values array of values
+   * @param datas array of call data
+   */
+  async encodeExecuteBatch (targets: string[], values: BigNumberish[], datas: string[]): Promise<string> {
+    const iface = new Interface([
+      'function executeBatch(address[] calldata dest, uint256[] calldata value, bytes[] calldata func) external'
+    ])
+    return iface.encodeFunctionData('executeBatch', [targets, values, datas])
+  }
+
   async signUserOpHash (userOpHash: string): Promise<string> {
     const signedMessage = await this.owner.signMessage(arrayify(userOpHash))
     const versionBytes = zeroPad(
