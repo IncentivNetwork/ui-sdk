@@ -5,7 +5,7 @@ import {
   UserOperationStruct
 } from '@account-abstraction/contracts'
 
-import { TransactionDetailsForUserOp } from './TransactionDetailsForUserOp'
+import { TransactionDetailsForUserOp, BatchTransactionDetailsForUserOp } from './TransactionDetailsForUserOp'
 import { resolveProperties } from 'ethers/lib/utils'
 import { PaymasterAPI } from './PaymasterAPI'
 import { getUserOpHash, NotPromise, packUserOp } from '@account-abstraction/utils'
@@ -100,6 +100,14 @@ export abstract class BaseAccountAPI {
    * @param data
    */
   abstract encodeExecute (target: string, value: BigNumberish, data: string): Promise<string>
+
+  /**
+   * encode a batch of method calls from entryPoint through our account to the target contracts.
+   * @param targets array of target addresses
+   * @param values array of values
+   * @param datas array of call data
+   */
+  abstract encodeExecuteBatch (targets: string[], values: BigNumberish[], datas: string[]): Promise<string>
 
   /**
    * sign a userOp's hash (userOpHash).
@@ -403,4 +411,139 @@ export abstract class BaseAccountAPI {
    * This should be implemented by derived classes
    */
   abstract getSignatureMode(): SignatureMode
+
+  /**
+   * encode batch operations for user operation call data and estimate gas
+   */
+  async encodeBatchUserOpCallDataAndGasLimit (detailsForUserOp: BatchTransactionDetailsForUserOp): Promise<{ callData: string, callGasLimit: BigNumber }> {
+    const { targets, values, datas } = detailsForUserOp
+
+    // Validate arrays have same length
+    if (targets.length !== values.length || targets.length !== datas.length) {
+      throw new Error('Batch operation arrays must have the same length')
+    }
+
+    const callData = await this.encodeExecuteBatch(targets, values, datas)
+
+    debug('Starting batch estimation for %d operations', targets.length)
+
+    // If user provided gas limit, use it
+    if (detailsForUserOp.gasLimit) {
+      debug('Using provided gas limit: %s', detailsForUserOp.gasLimit.toString())
+      return {
+        callData,
+        callGasLimit: BigNumber.from(detailsForUserOp.gasLimit)
+      }
+    }
+
+    debug('Using bundler estimation for batch operations...')
+    const initCode = await this.getInitCode()
+    const verificationGasLimit = await this.getVerificationGasLimit()
+
+    debug('Preparing bundler estimation for batch: %o', {
+      signatureMode: this.getSignatureMode(),
+      requestedVerificationGas: verificationGasLimit.toString()
+    })
+
+    const partialOp = {
+      sender: await this.getAccountAddress(),
+      nonce: await this.getNonce(),
+      initCode,
+      callData,
+      callGasLimit: 0,
+      verificationGasLimit,
+      maxFeePerGas: 0,
+      maxPriorityFeePerGas: 0,
+      paymasterAndData: '0x',
+      signature: '0x'
+    }
+
+    const bundlerEstimation = await this.httpRpcClient.estimateUserOpGas(partialOp)
+
+    if (!bundlerEstimation.success) {
+      throw new Error('Bundler gas estimation failed for batch operation')
+    }
+
+    debug('Bundler estimation details for batch: %o', {
+      signatureMode: this.getSignatureMode(),
+      requestedVerificationGas: verificationGasLimit.toString(),
+      bundlerVerificationGas: bundlerEstimation.verificationGas.toString(),
+      callGasLimit: bundlerEstimation.callGasLimit.toString(),
+      preVerificationGas: bundlerEstimation.preVerificationGas.toString(),
+      totalGas: (
+        Number(bundlerEstimation.verificationGas) +
+        Number(bundlerEstimation.callGasLimit) +
+        Number(bundlerEstimation.preVerificationGas)
+      ).toString()
+    })
+
+    return {
+      callData,
+      callGasLimit: BigNumber.from(bundlerEstimation.callGasLimit)
+    }
+  }
+
+  /**
+   * create a batch UserOperation, filling all details (except signature)
+   */
+  async createUnsignedBatchUserOp (info: BatchTransactionDetailsForUserOp): Promise<UserOperationStruct> {
+    const {
+      callData,
+      callGasLimit
+    } = await this.encodeBatchUserOpCallDataAndGasLimit(info)
+    const initCode = await this.getInitCode()
+
+    const initGas = await this.estimateCreationGas(initCode)
+    const verificationGasLimit = BigNumber.from(await this.getVerificationGasLimit())
+      .add(initGas)
+
+    let {
+      maxFeePerGas,
+      maxPriorityFeePerGas
+    } = info
+    if (maxFeePerGas == null || maxPriorityFeePerGas == null) {
+      const feeData = await this.provider.getFeeData()
+      if (maxFeePerGas == null) {
+        maxFeePerGas = feeData.maxFeePerGas ?? undefined
+      }
+      if (maxPriorityFeePerGas == null) {
+        maxPriorityFeePerGas = feeData.maxPriorityFeePerGas ?? undefined
+      }
+    }
+
+    const partialUserOp: any = {
+      sender: await this.getAccountAddress(),
+      nonce: info.nonce ?? await this.getNonce(),
+      initCode,
+      callData,
+      callGasLimit,
+      verificationGasLimit,
+      maxFeePerGas,
+      maxPriorityFeePerGas,
+      paymasterAndData: '0x'
+    }
+
+    let paymasterAndData: string | undefined
+    if (this.paymasterAPI != null) {
+      // fill (partial) preVerificationGas (all except the cost of the generated paymasterAndData)
+      const userOpForPm = {
+        ...partialUserOp,
+        preVerificationGas: await this.getPreVerificationGas(partialUserOp)
+      }
+      paymasterAndData = await this.paymasterAPI.getPaymasterAndData(userOpForPm)
+    }
+    partialUserOp.paymasterAndData = paymasterAndData ?? '0x'
+    return {
+      ...partialUserOp,
+      preVerificationGas: await this.getPreVerificationGas(partialUserOp),
+      signature: ''
+    }
+  }
+
+  /**
+   * helper method: create and sign a batch user operation.
+   */
+  async createSignedBatchUserOp (info: BatchTransactionDetailsForUserOp): Promise<UserOperationStruct> {
+    return await this.signUserOp(await this.createUnsignedBatchUserOp(info))
+  }
 }
