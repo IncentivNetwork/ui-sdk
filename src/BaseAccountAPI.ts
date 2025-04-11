@@ -248,6 +248,10 @@ export abstract class BaseAccountAPI {
       signature: '0x'
     }
 
+    if (this.paymasterAPI != null) {
+      partialOp.paymasterAndData = await this.paymasterAPI.getPaymasterAndData(partialOp) ?? '0x'
+    }
+
     const bundlerEstimation = await this.httpRpcClient.estimateUserOpGas(partialOp)
 
     if (!bundlerEstimation.success) {
@@ -456,6 +460,10 @@ export abstract class BaseAccountAPI {
       maxPriorityFeePerGas: 0,
       paymasterAndData: '0x',
       signature: '0x'
+    }
+
+    if (this.paymasterAPI != null) {
+      partialOp.paymasterAndData = await this.paymasterAPI.getPaymasterAndData(partialOp) ?? '0x'
     }
 
     const bundlerEstimation = await this.httpRpcClient.estimateUserOpGas(partialOp)
