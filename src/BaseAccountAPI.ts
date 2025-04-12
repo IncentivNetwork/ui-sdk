@@ -195,10 +195,10 @@ export abstract class BaseAccountAPI {
 
   async encodeUserOpCallDataAndGasLimit (detailsForUserOp: TransactionDetailsForUserOp): Promise<{ 
     callData: string,
-    callGasLimit: number,
-    verificationGas: number,
-    preVerificationGas: number,
-    totalGas: number,
+    callGasLimit: BigNumber,
+    verificationGas: BigNumber,
+    preVerificationGas: BigNumber,
+    totalGas: BigNumber,
     maxFeePerGas: BigNumber,
     maxPriorityFeePerGas: BigNumber
   }> {
@@ -230,10 +230,10 @@ export abstract class BaseAccountAPI {
       debug('Using provided gas limit: %s', detailsForUserOp.gasLimit.toString())
       return {
         callData,
-        callGasLimit: detailsForUserOp.gasLimit || 0,
-        verificationGas: 0,
-        preVerificationGas: 0,
-        totalGas: 0,
+        callGasLimit: BigNumber.from(detailsForUserOp.gasLimit),
+        verificationGas: BigNumber.from(0),
+        preVerificationGas: BigNumber.from(0),
+        totalGas: BigNumber.from(0),
         maxFeePerGas: BigNumber.from(0),
         maxPriorityFeePerGas: BigNumber.from(0)
       }
@@ -273,14 +273,12 @@ export abstract class BaseAccountAPI {
 
     const output = {
       callData,
-      callGasLimit: bundlerEstimation.callGasLimit,
-      verificationGas: bundlerEstimation.verificationGas,
-      preVerificationGas: bundlerEstimation.preVerificationGas,
-      totalGas: (
-        Number(bundlerEstimation.verificationGas) +
-        Number(bundlerEstimation.callGasLimit) +
-        Number(bundlerEstimation.preVerificationGas)
-      ),
+      callGasLimit: BigNumber.from(bundlerEstimation.callGasLimit),
+      verificationGas: BigNumber.from(bundlerEstimation.verificationGas),
+      preVerificationGas: BigNumber.from(bundlerEstimation.preVerificationGas),
+      totalGas: BigNumber.from(bundlerEstimation.verificationGas)
+        .add(BigNumber.from(bundlerEstimation.callGasLimit))
+        .add(BigNumber.from(bundlerEstimation.preVerificationGas)),
       maxFeePerGas: BigNumber.from(bundlerEstimation.maxFeePerGas),
       maxPriorityFeePerGas: BigNumber.from(bundlerEstimation.maxPriorityFeePerGas)
     }
@@ -433,10 +431,10 @@ export abstract class BaseAccountAPI {
    */
   async encodeBatchUserOpCallDataAndGasLimit (detailsForUserOp: BatchTransactionDetailsForUserOp): Promise<{ 
     callData: string,
-    callGasLimit: number,
-    verificationGas: number,
-    preVerificationGas: number,
-    totalGas: number,
+    callGasLimit: BigNumber,
+    verificationGas: BigNumber,
+    preVerificationGas: BigNumber,
+    totalGas: BigNumber,
     maxFeePerGas: BigNumber,
     maxPriorityFeePerGas: BigNumber
   }> {
@@ -456,10 +454,10 @@ export abstract class BaseAccountAPI {
       debug('Using provided gas limit: %s', detailsForUserOp.gasLimit.toString())
       return {
         callData,
-        callGasLimit: detailsForUserOp.gasLimit || 0,
-        verificationGas: 0,
-        preVerificationGas: 0,
-        totalGas: 0,
+        callGasLimit: BigNumber.from(detailsForUserOp.gasLimit),
+        verificationGas: BigNumber.from(0),
+        preVerificationGas: BigNumber.from(0),
+        totalGas: BigNumber.from(0),
         maxFeePerGas: BigNumber.from(0),
         maxPriorityFeePerGas: BigNumber.from(0)
       }
@@ -499,14 +497,12 @@ export abstract class BaseAccountAPI {
 
     const output = {
       callData,
-      callGasLimit: bundlerEstimation.callGasLimit,
-      verificationGas: bundlerEstimation.verificationGas,
-      preVerificationGas: bundlerEstimation.preVerificationGas,
-      totalGas: (
-        Number(bundlerEstimation.verificationGas) +
-        Number(bundlerEstimation.callGasLimit) +
-        Number(bundlerEstimation.preVerificationGas)
-      ),
+      callGasLimit: BigNumber.from(bundlerEstimation.callGasLimit),
+      verificationGas: BigNumber.from(bundlerEstimation.verificationGas),
+      preVerificationGas: BigNumber.from(bundlerEstimation.preVerificationGas),
+      totalGas: BigNumber.from(bundlerEstimation.verificationGas)
+        .add(BigNumber.from(bundlerEstimation.callGasLimit))
+        .add(BigNumber.from(bundlerEstimation.preVerificationGas)),
       maxFeePerGas: BigNumber.from(bundlerEstimation.maxFeePerGas),
       maxPriorityFeePerGas: BigNumber.from(bundlerEstimation.maxPriorityFeePerGas)
     }
