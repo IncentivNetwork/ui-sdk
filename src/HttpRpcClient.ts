@@ -57,7 +57,10 @@ export class HttpRpcClient {
     callGasLimit: number
     preVerificationGas: number
     verificationGas: number
+    maxFeePerGas: number
+    maxPriorityFeePerGas: number
     success: boolean
+    error?: string
   }> {
     try {
       await this.initializing
@@ -89,6 +92,9 @@ export class HttpRpcClient {
         callGasLimit: 0,
         preVerificationGas: 0,
         verificationGas: 0,
+        maxFeePerGas: 0,
+        maxPriorityFeePerGas: 0,
+        error: errorMessage,
         success: false
       }
     }

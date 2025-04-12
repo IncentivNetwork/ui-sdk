@@ -193,7 +193,15 @@ export abstract class BaseAccountAPI {
     return packUserOp(userOp, false)
   }
 
-  async encodeUserOpCallDataAndGasLimit (detailsForUserOp: TransactionDetailsForUserOp): Promise<{ callData: string, callGasLimit: BigNumber }> {
+  async encodeUserOpCallDataAndGasLimit (detailsForUserOp: TransactionDetailsForUserOp): Promise<{ 
+    callData: string,
+    callGasLimit: number,
+    verificationGas: number,
+    preVerificationGas: number,
+    totalGas: number,
+    maxFeePerGas: BigNumber,
+    maxPriorityFeePerGas: BigNumber
+  }> {
     function parseNumber (a: any): BigNumber | null {
       if (a == null || a === '') return null
       return BigNumber.from(a.toString())
@@ -222,7 +230,12 @@ export abstract class BaseAccountAPI {
       debug('Using provided gas limit: %s', detailsForUserOp.gasLimit.toString())
       return {
         callData,
-        callGasLimit: BigNumber.from(detailsForUserOp.gasLimit)
+        callGasLimit: detailsForUserOp.gasLimit || 0,
+        verificationGas: 0,
+        preVerificationGas: 0,
+        totalGas: 0,
+        maxFeePerGas: BigNumber.from(0),
+        maxPriorityFeePerGas: BigNumber.from(0)
       }
     }
 
@@ -255,26 +268,25 @@ export abstract class BaseAccountAPI {
     const bundlerEstimation = await this.httpRpcClient.estimateUserOpGas(partialOp)
 
     if (!bundlerEstimation.success) {
-      throw new Error('Bundler gas estimation failed')
+      throw new Error(bundlerEstimation.error ?? 'Bundler gas estimation failed')
     }
 
-    debug('Bundler estimation details: %o', {
-      signatureMode: this.getSignatureMode(),
-      requestedVerificationGas: verificationGasLimit.toString(),
-      bundlerVerificationGas: bundlerEstimation.verificationGas.toString(),
-      callGasLimit: bundlerEstimation.callGasLimit.toString(),
-      preVerificationGas: bundlerEstimation.preVerificationGas.toString(),
+    const output = {
+      callData,
+      callGasLimit: bundlerEstimation.callGasLimit,
+      verificationGas: bundlerEstimation.verificationGas,
+      preVerificationGas: bundlerEstimation.preVerificationGas,
       totalGas: (
         Number(bundlerEstimation.verificationGas) +
         Number(bundlerEstimation.callGasLimit) +
         Number(bundlerEstimation.preVerificationGas)
-      ).toString()
-    })
-
-    return {
-      callData,
-      callGasLimit: BigNumber.from(bundlerEstimation.callGasLimit)
+      ),
+      maxFeePerGas: BigNumber.from(bundlerEstimation.maxFeePerGas),
+      maxPriorityFeePerGas: BigNumber.from(bundlerEstimation.maxPriorityFeePerGas)
     }
+
+    debug('Bundler estimation details: %o', output)
+    return output
   }
 
   /**
@@ -419,7 +431,15 @@ export abstract class BaseAccountAPI {
   /**
    * encode batch operations for user operation call data and estimate gas
    */
-  async encodeBatchUserOpCallDataAndGasLimit (detailsForUserOp: BatchTransactionDetailsForUserOp): Promise<{ callData: string, callGasLimit: BigNumber }> {
+  async encodeBatchUserOpCallDataAndGasLimit (detailsForUserOp: BatchTransactionDetailsForUserOp): Promise<{ 
+    callData: string,
+    callGasLimit: number,
+    verificationGas: number,
+    preVerificationGas: number,
+    totalGas: number,
+    maxFeePerGas: BigNumber,
+    maxPriorityFeePerGas: BigNumber
+  }> {
     const { targets, values, datas } = detailsForUserOp
 
     // Validate arrays have same length
@@ -436,7 +456,12 @@ export abstract class BaseAccountAPI {
       debug('Using provided gas limit: %s', detailsForUserOp.gasLimit.toString())
       return {
         callData,
-        callGasLimit: BigNumber.from(detailsForUserOp.gasLimit)
+        callGasLimit: detailsForUserOp.gasLimit || 0,
+        verificationGas: 0,
+        preVerificationGas: 0,
+        totalGas: 0,
+        maxFeePerGas: BigNumber.from(0),
+        maxPriorityFeePerGas: BigNumber.from(0)
       }
     }
 
@@ -469,26 +494,25 @@ export abstract class BaseAccountAPI {
     const bundlerEstimation = await this.httpRpcClient.estimateUserOpGas(partialOp)
 
     if (!bundlerEstimation.success) {
-      throw new Error('Bundler gas estimation failed for batch operation')
+      throw new Error(bundlerEstimation.error ?? 'Bundler gas estimation failed for batch operation')
     }
 
-    debug('Bundler estimation details for batch: %o', {
-      signatureMode: this.getSignatureMode(),
-      requestedVerificationGas: verificationGasLimit.toString(),
-      bundlerVerificationGas: bundlerEstimation.verificationGas.toString(),
-      callGasLimit: bundlerEstimation.callGasLimit.toString(),
-      preVerificationGas: bundlerEstimation.preVerificationGas.toString(),
+    const output = {
+      callData,
+      callGasLimit: bundlerEstimation.callGasLimit,
+      verificationGas: bundlerEstimation.verificationGas,
+      preVerificationGas: bundlerEstimation.preVerificationGas,
       totalGas: (
         Number(bundlerEstimation.verificationGas) +
         Number(bundlerEstimation.callGasLimit) +
         Number(bundlerEstimation.preVerificationGas)
-      ).toString()
-    })
-
-    return {
-      callData,
-      callGasLimit: BigNumber.from(bundlerEstimation.callGasLimit)
+      ),
+      maxFeePerGas: BigNumber.from(bundlerEstimation.maxFeePerGas),
+      maxPriorityFeePerGas: BigNumber.from(bundlerEstimation.maxPriorityFeePerGas)
     }
+
+    debug('Bundler estimation details for batch: %o', output)
+    return output
   }
 
   /**
