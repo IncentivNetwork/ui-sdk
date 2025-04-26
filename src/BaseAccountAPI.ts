@@ -197,6 +197,7 @@ export abstract class BaseAccountAPI {
     callData: string,
     callGasLimit: BigNumber,
     verificationGas: BigNumber,
+    verificationGasLimit: BigNumber,
     preVerificationGas: BigNumber,
     totalGas: BigNumber,
     maxFeePerGas: BigNumber,
@@ -233,6 +234,7 @@ export abstract class BaseAccountAPI {
         callGasLimit: BigNumber.from(detailsForUserOp.gasLimit),
         verificationGas: BigNumber.from(0),
         preVerificationGas: BigNumber.from(0),
+        verificationGasLimit: BigNumber.from(0),
         totalGas: BigNumber.from(0),
         maxFeePerGas: BigNumber.from(0),
         maxPriorityFeePerGas: BigNumber.from(0)
@@ -275,8 +277,9 @@ export abstract class BaseAccountAPI {
       callData,
       callGasLimit: BigNumber.from(bundlerEstimation.callGasLimit),
       verificationGas: BigNumber.from(bundlerEstimation.verificationGas),
+      verificationGasLimit: BigNumber.from(verificationGasLimit),
       preVerificationGas: BigNumber.from(bundlerEstimation.preVerificationGas),
-      totalGas: BigNumber.from(bundlerEstimation.verificationGas)
+      totalGas: BigNumber.from(verificationGasLimit)
         .add(BigNumber.from(bundlerEstimation.callGasLimit))
         .add(BigNumber.from(bundlerEstimation.preVerificationGas)),
       maxFeePerGas: BigNumber.from(bundlerEstimation.maxFeePerGas),
@@ -434,6 +437,7 @@ export abstract class BaseAccountAPI {
     callGasLimit: BigNumber,
     verificationGas: BigNumber,
     preVerificationGas: BigNumber,
+    verificationGasLimit: BigNumber,
     totalGas: BigNumber,
     maxFeePerGas: BigNumber,
     maxPriorityFeePerGas: BigNumber
@@ -457,6 +461,7 @@ export abstract class BaseAccountAPI {
         callGasLimit: BigNumber.from(detailsForUserOp.gasLimit),
         verificationGas: BigNumber.from(0),
         preVerificationGas: BigNumber.from(0),
+        verificationGasLimit: BigNumber.from(0),
         totalGas: BigNumber.from(0),
         maxFeePerGas: BigNumber.from(0),
         maxPriorityFeePerGas: BigNumber.from(0)
@@ -499,8 +504,9 @@ export abstract class BaseAccountAPI {
       callData,
       callGasLimit: BigNumber.from(bundlerEstimation.callGasLimit),
       verificationGas: BigNumber.from(bundlerEstimation.verificationGas),
+      verificationGasLimit: BigNumber.from(verificationGasLimit),
       preVerificationGas: BigNumber.from(bundlerEstimation.preVerificationGas),
-      totalGas: BigNumber.from(bundlerEstimation.verificationGas)
+      totalGas: BigNumber.from(verificationGasLimit)
         .add(BigNumber.from(bundlerEstimation.callGasLimit))
         .add(BigNumber.from(bundlerEstimation.preVerificationGas)),
       maxFeePerGas: BigNumber.from(bundlerEstimation.maxFeePerGas),
