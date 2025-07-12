@@ -1,4 +1,4 @@
-# UI-SDK Documentation Guide
+# UI-SDK Implementation Guide
 
 ## Table of Contents
 - [Introduction](#introduction)
@@ -20,7 +20,7 @@
 
 ## Introduction
 
-UI-SDK is a powerful library that enables Account Abstraction (AA) capabilities in web applications by providing a streamlined interface for communicating with ERC-4337 bundlers. It supports both EOA (Externally Owned Account) and Passkey-based authentication methods for creating AA wallets.
+UI-SDK is the go-to approach for implementing Account Abstraction (AA) capabilities in Incentiv applications by providing a streamlined interface for communicating with ERC-4337 bundlers. It supports both EOA (Externally Owned Account) and Passkey-based authentication methods for creating AA wallets.
 
 ### What is Account Abstraction?
 
@@ -55,274 +55,329 @@ For Passkey-based authentication:
 ## Installation
 
 ```bash
-npm install ui-sdk ethers@5.7.2 base64url cbor elliptic bn.js js-sha256
+npm install ui-sdk ethers@5.7.2
 # or
-yarn add ui-sdk ethers@5.7.2 base64url cbor elliptic bn.js js-sha256
+yarn add ui-sdk ethers@5.7.2
 ```
 
 ## Account Abstraction Providers
 
+### Configuration
+
+Before creating any Account Abstraction provider, you need to configure the SDK with the following required parameters:
+
+```javascript
+const config = {
+  chainId: 11690,                    // The blockchain network ID
+  entryPointAddress: '0x...',        // ERC-4337 EntryPoint contract address
+  bundlerUrl: 'https://...',         // URL of the ERC-4337 bundler service
+  factoryAddress: '0x...'            // Smart account factory contract address
+};
+```
+
+#### Configuration Parameters
+
+- **chainId**: The blockchain network identifier (e.g., 1 for Ethereum mainnet, 11690 for custom networks)
+- **entryPointAddress**: The address of the ERC-4337 EntryPoint contract that handles UserOperations
+- **bundlerUrl**: The HTTP endpoint of the bundler service that processes and submits UserOperations
+- **factoryAddress**: The address of the factory contract that creates smart contract accounts
+
 ### Creating an EOA-based Account Abstraction Provider
 
-To use the UI-SDK with an existing Externally Owned Account (EOA) like MetaMask, you'll need to create an Account Abstraction provider that wraps your EOA. This allows your regular wallet to interact with the Account Abstraction system. Here's how to set it up:
+An EOA (Externally Owned Account) provider wraps existing wallet providers like MetaMask, WalletConnect, or any other Ethereum wallet to work with Account Abstraction. This allows users to leverage their existing wallets while gaining the benefits of smart contract accounts.
+
+The EOA provider:
+- Uses your existing wallet's signing capabilities
+- Converts regular transactions into UserOperations
+- Handles gas estimation and payment through the smart contract account
+- Maintains compatibility with existing wallet interfaces
 
 ```javascript
 import { ethers } from 'ethers';
-import { wrapProvider } from 'ui-sdk';
+import { getEoaProvider } from 'ui-sdk';
 
-const getAAProvider = async () => {
-  // Initialize provider with MetaMask
-  const provider = new ethers.providers.Web3Provider(window.ethereum);
-
+const createEoaProvider = async () => {
+  // You can use any base provider - MetaMask, WalletConnect, etc.
+  const baseProvider = new ethers.providers.Web3Provider(window.ethereum);
+  
   // Request account access if needed
   await window.ethereum.request({ method: 'eth_requestAccounts' });
 
-  const signer = provider.getSigner();
-
-  // Configuration for AA Provider
   const config = {
-    chainId: await provider.getNetwork().then((net) => net.chainId),
+    chainId: await baseProvider.getNetwork().then((net) => net.chainId),
     entryPointAddress: process.env.REACT_APP_ENTRY_POINT_ADDRESS,
     bundlerUrl: process.env.REACT_APP_BUNDLER_URL,
-    factoryAddress: process.env.REACT_APP_ACCOUNT_FACTORY_ADDRESS,
-    factoryManagerAddress: process.env.REACT_APP_FACTORY_MANAGER_ADDRESS
+    factoryAddress: process.env.REACT_APP_ACCOUNT_FACTORY_ADDRESS
   };
 
-  // Validate configuration
-  if (!config.entryPointAddress || !config.bundlerUrl ||
-      (!config.factoryAddress && !config.factoryManagerAddress)) {
-    throw new Error('Missing required configuration parameters');
-  }
-
-  // Create and return the AA provider
-  const aaProvider = await wrapProvider(provider, config, signer);
-
-  if (!aaProvider.getSigner()) {
-    throw new Error('Failed to initialize the Account Abstraction provider');
-  }
-
+  // Create the AA provider using the EOA provider
+  const aaProvider = await getEoaProvider(baseProvider, config);
+  
   return aaProvider;
 };
 
-Note: If MetaMask is not detected, you should handle this case by either:
-- Prompting the user to install MetaMask
-- Falling back to a different authentication method
-- Providing a link to MetaMask installation
+// Example with WalletConnect
+const createWalletConnectProvider = async () => {
+  // Initialize WalletConnect provider
+  const walletConnectProvider = new WalletConnectProvider({
+    infuraId: "your-infura-id"
+  });
+  
+  await walletConnectProvider.enable();
+  const baseProvider = new ethers.providers.Web3Provider(walletConnectProvider);
+  
+  // Use the same getEoaProvider function
+  const aaProvider = await getEoaProvider(baseProvider, config);
+  
+  return aaProvider;
+};
+```
 
 ### Creating a Passkey-based Account Abstraction Provider
 
-Passkeys provide a secure, passwordless way to create and manage Account Abstraction wallets. Setting up a passkey-based provider involves three steps: registration, authentication, and signer implementation. Here's a complete guide to implementing each component:
+A passkey provider enables passwordless authentication using WebAuthn (passkeys). This approach eliminates the need for traditional wallets and provides a more secure, user-friendly experience.
 
-#### Passkey Registration
-
-```javascript
-import base64url from 'base64url';
-
-export const registerPasskey = async (passkeyName) => {
-  // Generate random challenge
-  const challenge = new Uint8Array(32);
-  window.crypto.getRandomValues(challenge);
-
-  // Configure WebAuthn credential creation
-  const publicKeyCredentialCreationOptions = {
-    publicKey: {
-      challenge,
-      rp: {
-        name: 'Your Wallet Name',
-        id: window.location.hostname,
-      },
-      user: {
-        id: crypto.getRandomValues(new Uint8Array(16)),
-        name: passkeyName,
-        displayName: passkeyName,
-      },
-      pubKeyCredParams: [{ alg: -7, type: 'public-key' }], // P-256 algorithm
-      authenticatorSelection: {
-        authenticatorAttachment: 'platform',
-        userVerification: 'required',
-      },
-      timeout: 60000,
-      attestation: 'direct',
-    },
-  };
-
-  // Create credential
-  const credential = await navigator.credentials.create(
-    publicKeyCredentialCreationOptions
-  );
-
-  // Extract public key and store passkey
-  const publicKey = await extractPublicKeyFromAttestation(
-    credential.response.attestationObject
-  );
-
-  // Store passkey information
-  const credentialId = base64url.encode(new Uint8Array(credential.rawId));
-  const newPasskey = {
-    id: credentialId,
-    name: passkeyName,
-    publicKey,
-    createdAt: new Date().toISOString()
-  };
-
-  // Save to local storage
-  const existingPasskeys = JSON.parse(localStorage.getItem('passkeys') || '[]');
-  existingPasskeys.push(newPasskey);
-  localStorage.setItem('passkeys', JSON.stringify(existingPasskeys));
-  localStorage.setItem('currentPasskey', credentialId);
-
-  return { credential, publicKey };
-};
-```
-
-#### Passkey Authentication
-
-```javascript
-export const loginWithPasskey = async () => {
-  // Generate challenge for authentication
-  const challenge = new Uint8Array(32);
-  window.crypto.getRandomValues(challenge);
-
-  // Configure WebAuthn assertion options
-  const publicKeyCredentialRequestOptions = {
-    publicKey: {
-      challenge,
-      rpId: window.location.hostname,
-      userVerification: 'required',
-      timeout: 60000,
-      allowCredentials: [], // Empty to show all available passkeys
-    },
-  };
-
-  // Get assertion
-  const assertion = await navigator.credentials.get(publicKeyCredentialRequestOptions);
-  const credentialId = base64url.encode(new Uint8Array(assertion.rawId));
-
-  // Verify existing passkey
-  const existingPasskeys = JSON.parse(localStorage.getItem('passkeys') || '[]');
-  const existingPasskey = existingPasskeys.find(pk => pk.id === credentialId);
-
-  if (existingPasskey) {
-    localStorage.setItem('currentPasskey', credentialId);
-    return { publicKey: existingPasskey.publicKey };
-  }
-
-  // For new passkeys, implement key recovery process
-  // ... (implement key recovery if needed)
-};
-```
-
-#### Passkey Signer Implementation
+The passkey provider:
+- Uses biometric authentication (fingerprint, face recognition, or PIN)
+- Stores cryptographic keys securely in the device's hardware
+- Provides cross-platform compatibility
+- Enables seamless user experience without browser extensions
 
 ```javascript
 import { ethers } from 'ethers';
-import base64url from 'base64url';
+import { getPasskeyProvider, WebAuthnPublicKey } from 'ui-sdk';
 
-export const initializePasskeySigner = async () => {
-  // Get current passkey
-  const passkeys = JSON.parse(localStorage.getItem('passkeys') || '[]');
-  const currentPasskeyId = localStorage.getItem('currentPasskey');
-
-  if (!currentPasskeyId || !passkeys.length) {
-    throw new Error('No passkeys found. Please register or login first.');
-  }
-
-  const currentPasskey = passkeys.find(pk => pk.id === currentPasskeyId);
-  if (!currentPasskey) {
-    throw new Error('Selected passkey not found.');
-  }
-
-  // Convert public key coordinates to hex
-  const xHex = '0x' + Buffer.from(base64url.toBuffer(currentPasskey.publicKey.x))
-    .toString('hex')
-    .padStart(64, '0');
-  const yHex = '0x' + Buffer.from(base64url.toBuffer(currentPasskey.publicKey.y))
-    .toString('hex')
-    .padStart(64, '0');
-
-  // Create passkey signer
-  const passkeySigner = {
-    async signMessage(message) {
-      const challenge = message;
-      const assertion = await navigator.credentials.get({
-        publicKey: {
-          challenge,
-          rpId: window.location.hostname,
-          userVerification: 'required',
-          allowCredentials: [{
-            id: base64url.toBuffer(currentPasskeyId).buffer,
-            type: 'public-key',
-          }],
-          timeout: 60000,
-        },
-      });
-
-      // Process WebAuthn response
-      const authenticatorData = new Uint8Array(assertion.response.authenticatorData);
-      const clientDataJSON = new Uint8Array(assertion.response.clientDataJSON);
-      const signatureDER = new Uint8Array(assertion.response.signature);
-      const { r, s } = parseDerSignature(signatureDER);
-
-      // Create signature struct
-      const signatureStruct = {
-        authenticatorData,
-        clientDataJSON: new TextDecoder().decode(clientDataJSON),
-        challengeLocation: clientDataJSON.indexOf('"challenge"'),
-        responseTypeLocation: clientDataJSON.indexOf('"type"'),
-        r: ethers.BigNumber.from(r),
-        s: ethers.BigNumber.from(s),
-        publicKeyX: xHex,
-        publicKeyY: yHex
-      };
-
-      // Encode signature
-      return ethers.utils.defaultAbiCoder.encode(
-        [{
-          components: [
-            { name: 'authenticatorData', type: 'bytes' },
-            { name: 'clientDataJSON', type: 'string' },
-            { name: 'challengeLocation', type: 'uint256' },
-            { name: 'responseTypeLocation', type: 'uint256' },
-            { name: 'r', type: 'uint256' },
-            { name: 's', type: 'uint256' },
-            { name: 'publicKeyX', type: 'uint256' },
-            { name: 'publicKeyY', type: 'uint256' }
-          ],
-          name: 'Signature',
-          type: 'tuple',
-        }],
-        [signatureStruct]
-      );
-    },
-    getAddress: async () => '0x', // Address will be derived by the AA provider
-    publicKey: { x: xHex, y: yHex }
-  };
-
-  return passkeySigner;
-};
-```
-
-### Creating the Passkey AA Provider
-
-```javascript
-import { wrapProvider } from 'ui-sdk';
-
-const getAAPasskeyProvider = async () => {
-  // Initialize the passkey signer
-  const passkeySigner = await initializePasskeySigner();
+const createPasskeyProvider = async (credential) => {
+  // Create a base provider using StaticJsonRpcProvider
+  const baseProvider = new ethers.providers.StaticJsonRpcProvider(
+    process.env.REACT_APP_RPC_URL
+  );
 
   const config = {
-    chainId: 11690, // Replace with your chain ID
+    chainId: 11690, // Your network chain ID
     entryPointAddress: process.env.REACT_APP_ENTRY_POINT_ADDRESS,
     bundlerUrl: process.env.REACT_APP_BUNDLER_URL,
-    factoryAddress: process.env.REACT_APP_ACCOUNT_FACTORY_ADDRESS,
-    factoryManagerAddress: process.env.REACT_APP_FACTORY_MANAGER_ADDRESS
+    factoryAddress: process.env.REACT_APP_ACCOUNT_FACTORY_ADDRESS
   };
 
-  const provider = new ethers.providers.JsonRpcProvider(process.env.REACT_APP_RPC_URL);
-  return await wrapProvider(provider, config, passkeySigner);
+  // Create the AA provider using the passkey provider
+  const aaProvider = await getPasskeyProvider(baseProvider, credential, config);
+  
+  return aaProvider;
 };
 ```
+
+#### WebAuthnCredential Type
+
+The `WebAuthnCredential` object contains the passkey information needed to create a provider:
+
+```javascript
+import { WebAuthnCredential } from 'ui-sdk';
+
+// WebAuthnCredential type structure:
+// {
+//   credentialId: string;        // Base64url encoded credential ID
+//   publicKey: WebAuthnPublicKey; // WebAuthn public key object
+// }
+```
+
+### Creating a Passkey Account
+
+The passkey account creation process involves registration, server communication, and subsequent authentication. Here's the complete flow:
+
+#### Step 1: Register the Passkey
+
+```javascript
+import { registerPasskey, WebAuthnPublicKey } from 'ui-sdk';
+
+const registerNewPasskey = async (passkeyName, challenge, userId) => {
+  try {
+    // Register the passkey with WebAuthn
+    const response = await registerPasskey(passkeyName, challenge, userId);
+    
+    // Extract credential ID from the response
+    const credentialId = response.credential.id;
+    
+    // Create WebAuthnPublicKey from the attestation object
+    const publicKey = await WebAuthnPublicKey.fromAttetationObject(
+      response.credential.response.attestationObject
+    );
+    
+    return {
+      credentialId,
+      publicKey,
+      attestationObject: response.credential.response.attestationObject,
+      signature: response.signature
+    };
+  } catch (error) {
+    console.error('Passkey registration failed:', error);
+    throw error;
+  }
+};
+```
+
+#### Step 2: Complete Registration Flow
+
+The typical passkey registration and authentication flow works as follows:
+
+```javascript
+// Complete passkey registration flow
+const completePasskeyRegistration = async (passkeyName) => {
+  try {
+    // 1. Get registration challenge from your server
+    const challengeResponse = await fetch('/api/auth/register/challenge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passkeyName })
+    });
+    
+    const { challenge, userId } = await challengeResponse.json();
+    
+    // 2. Register the passkey
+    const registrationResult = await registerNewPasskey(passkeyName, challenge, userId);
+    
+    // 3. Send attestation object to server for verification and storage
+    const verificationResponse = await fetch('/api/auth/register/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        credentialId: registrationResult.credentialId,
+        attestationObject: registrationResult.attestationObject,
+        signature: registrationResult.signature,
+        publicKeyX: registrationResult.publicKey.getX('hex'),
+        publicKeyY: registrationResult.publicKey.getY('hex')
+      })
+    });
+    
+    const verificationResult = await verificationResponse.json();
+    
+    if (verificationResult.success) {
+      console.log('Passkey registration successful!');
+      return registrationResult;
+    } else {
+      throw new Error('Server verification failed');
+    }
+  } catch (error) {
+    console.error('Registration flow failed:', error);
+    throw error;
+  }
+};
+```
+
+#### Step 3: Login with Passkey
+
+```javascript
+import { signPasskeyLoginChallenge } from 'ui-sdk';
+
+const loginWithPasskey = async () => {
+  try {
+    // 1. Get login challenge from server
+    const challengeResponse = await fetch('/api/auth/login/challenge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const { challenge } = await challengeResponse.json();
+    
+    // 2. Sign the challenge with passkey
+    const signatureResult = await signPasskeyLoginChallenge(challenge);
+    
+    // 3. Send signature to server for verification
+    const loginResponse = await fetch('/api/auth/login/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        credentialId: signatureResult.credential.id,
+        signature: signatureResult.signature
+      })
+    });
+    
+    const loginResult = await loginResponse.json();
+    
+    if (loginResult.success) {
+      // 4. Get user's public key and credential ID from server
+      const userDataResponse = await fetch('/api/user/passkey-data', {
+        headers: { 'Authorization': `Bearer ${loginResult.token}` }
+      });
+      
+      const userData = await userDataResponse.json();
+      
+      // 5. Create WebAuthnPublicKey from server data
+      const publicKey = WebAuthnPublicKey.fromCoordinates(
+        userData.publicKeyX,
+        userData.publicKeyY,
+        'hex'
+      );
+      
+      // 6. Create credential object for provider
+      const credential = {
+        credentialId: userData.credentialId,
+        publicKey: publicKey
+      };
+      
+      // 7. Create passkey provider
+      const aaProvider = await createPasskeyProvider(credential);
+      
+      return aaProvider;
+    } else {
+      throw new Error('Login verification failed');
+    }
+  } catch (error) {
+    console.error('Login flow failed:', error);
+    throw error;
+  }
+};
+```
+
+#### Complete Example Usage
+
+```javascript
+// Registration flow
+const handleRegister = async () => {
+  const passkeyName = "My Wallet";
+  const registrationResult = await completePasskeyRegistration(passkeyName);
+  
+  // Store credential locally for future use (optional)
+  localStorage.setItem('passkeyCredential', JSON.stringify({
+    credentialId: registrationResult.credentialId,
+    publicKeyX: registrationResult.publicKey.getX('hex'),
+    publicKeyY: registrationResult.publicKey.getY('hex')
+  }));
+  
+  console.log('Passkey registered successfully!');
+};
+
+// Login flow
+const handleLogin = async () => {
+  const aaProvider = await loginWithPasskey();
+  
+  // Now you can use the provider for transactions
+  const signer = aaProvider.getSigner();
+  const address = await signer.getAddress();
+  
+  console.log('Smart account address:', address);
+  return aaProvider;
+};
+```
+
+#### Authentication Flow Summary
+
+1. **Registration**: 
+   - Call `registerPasskey()` with challenge from server
+   - Extract `credentialId` and create `WebAuthnPublicKey` from attestation object
+   - Send attestation data to server for verification and storage
+
+2. **Login**:
+   - Sign login challenge using `signPasskeyLoginChallenge()`
+   - Send signature to server for verification
+   - Retrieve public key and credential ID from server
+   - Create `WebAuthnCredential` object and initialize provider
+
+3. **Usage**:
+   - Use the created provider for all Account Abstraction operations
+   - The provider handles WebAuthn signing automatically for transactions
+
+This approach provides a seamless, secure authentication experience while maintaining the full capabilities of Account Abstraction.
 
 ## Transaction Operations
 

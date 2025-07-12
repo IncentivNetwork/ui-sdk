@@ -1,66 +1,194 @@
-# SDK to create and send UserOperation
+# UI-SDK
 
-This package provides 2 APIs for using UserOperations:
+A TypeScript SDK that enables **Account Abstraction (ERC-4337)** capabilities in Incentiv Platform applications, providing a streamlined interface for creating smart contract wallets with enhanced security and user experience.
 
-- Low-level "walletAPI"
-- High-level Provider
+## What does UI-SDK do?
 
+UI-SDK transforms how users interact with blockchain applications by enabling **smart contract wallets** instead of traditional Externally Owned Accounts (EOAs). This unlocks powerful features like:
 
-## LowLevel API:
+- **Passwordless Authentication** with biometric passkeys
+- **Batch Transactions** for improved efficiency
+- **Gas Abstraction** and sponsored transactions
+- **Account Recovery** mechanisms
+- **Custom Security Policies** and spending limits
+- **Multi-signature** requirements
+- **Transaction Automation** and whitelisting
 
-### BaseWalletAPI
+## Key Features
 
-An abstract base-class to create UserOperation for a contract wallet.
+🔐 **Dual Authentication Methods**
+- **EOA Provider**: Integrate with existing wallets (MetaMask, WalletConnect, etc.)
+- **Passkey Provider**: Passwordless authentication using WebAuthn biometrics
 
-### SimpleAccountAPI
+⚡ **Seamless Integration**
+- Drop-in replacement for standard ethers.js providers
+- Compatible with existing dApps and smart contracts
+- Full TypeScript support with comprehensive type definitions
 
-An implementation of the BaseWalletAPI, for the SimpleWallet sample of account-abstraction.
+🛡️ **Enhanced Security**
+- Hardware-backed passkey storage
+- Multi-layered signature validation
+- Customizable security policies
 
-```typescript
-owner = provider.getSigner()
-const walletAPI = new SimpleAccountAPI({
-    provider,
-    entryPointAddress,
-    owner,
-    factoryAddress
-})
-const op = await walletAPI.createSignedUserOp({
-  target: recipient.address,
-  data: recipient.interface.encodeFunctionData('something', ['hello'])
-})
+## Quick Start
+
+### Installation
+
+```bash
+npm install ui-sdk ethers@5.7.2
 ```
 
-## High-Level Provider API
+### EOA Provider (MetaMask, WalletConnect, etc.)
 
-A simplified mode that doesn't require a different wallet extension.
-Instead, the current provider's account is used as wallet owner by calling its "Sign Message" operation.
-
-This can only work for wallets that use an EIP-191 ("Ethereum Signed Message") signature (like our sample SimpleWallet)
-Also, the UX is not great (the user is asked to sign a hash, and even the wallet address is not mentioned, only the signer)
+Transform your existing wallet into a smart contract wallet:
 
 ```typescript
-import { wrapProvider } from '@account-abstraction/sdk'
+import { ethers } from 'ethers';
+import { getEoaProvider } from 'ui-sdk';
 
-//use this account as wallet-owner (which will be used to sign the requests)
-const aaSigner = provider.getSigner()
+// Works with any existing provider
+const baseProvider = new ethers.providers.Web3Provider(window.ethereum);
+await window.ethereum.request({ method: 'eth_requestAccounts' });
+
 const config = {
-  chainId: await provider.getNetwork().then(net => net.chainId),
-  entryPointAddress,
-  bundlerUrl: 'http://localhost:3000/rpc',
-  factoryAddress,  // You need to provide either factoryAddress or factoryManagerAddress
-  factoryManagerAddress  // Optional, but needed if factoryAddress is not provided
-}
-const aaProvider = await wrapProvider(provider, config, aaSigner)
-const walletAddress = await aaProvider.getSigner().getAddress()
+  chainId: 1,
+  entryPointAddress: '0x...',
+  bundlerUrl: 'https://...',
+  factoryAddress: '0x...'
+};
 
-// send some eth to the wallet Address: wallet should have some balance to pay for its own creation, and for calling methods.
+const aaProvider = await getEoaProvider(baseProvider, config);
 
-const myContract = new Contract(abi, aaProvider)
-
-// this method will get called from the wallet address, through account-abstraction EntryPoint
-await myContract.someMethod()
+// Use like any ethers provider
+const signer = aaProvider.getSigner();
+const address = await signer.getAddress();
 ```
 
-### Configuration Note:
-- When using the **high-level provider API**, you **must** provide either the `factoryAddress` (pre-deployed factory contract) or the `factoryManagerAddress` (to fetch the `factoryAddress` dynamically).
-- If both are missing, an error will be thrown during initialization.
+### Passkey Provider (Biometric Authentication)
+
+Create a passwordless wallet experience:
+
+```typescript
+import { ethers } from 'ethers';
+import { getPasskeyProvider, registerPasskey, WebAuthnPublicKey } from 'ui-sdk';
+
+// 1. Register a new passkey
+const registrationResult = await registerPasskey(
+  'My Wallet',
+  challengeFromServer,
+  userId
+);
+
+// 2. Extract public key
+const publicKey = await WebAuthnPublicKey.fromAttetationObject(
+  registrationResult.credential.response.attestationObject
+);
+
+// 3. Create provider
+const baseProvider = new ethers.providers.StaticJsonRpcProvider(rpcUrl);
+const credential = {
+  credentialId: registrationResult.credential.id,
+  publicKey: publicKey
+};
+
+const aaProvider = await getPasskeyProvider(baseProvider, credential, config);
+
+// Use with biometric authentication
+const signer = aaProvider.getSigner();
+const tx = await signer.sendTransaction({
+  to: '0x...',
+  value: ethers.utils.parseEther('1.0')
+});
+```
+
+## Advanced Features
+
+### Batch Transactions
+
+Execute multiple operations in a single transaction:
+
+```typescript
+const transactions = [
+  { to: '0x123...', value: ethers.utils.parseEther('1.0') },
+  { to: '0x456...', value: ethers.utils.parseEther('0.5') }
+];
+
+const txResponse = await signer.sendBatchTransaction({
+  targets: transactions.map(tx => tx.to),
+  values: transactions.map(tx => tx.value),
+  datas: transactions.map(tx => tx.data || '0x')
+});
+```
+
+### Contract Deployment
+
+Deploy contracts with deterministic addresses:
+
+```typescript
+import { deployContract, predictContractAddress } from 'ui-sdk';
+
+// Predict address before deployment
+const predictedAddress = await predictContractAddress(aaProvider, {
+  bytecode: contractBytecode,
+  constructorArgs: [arg1, arg2]
+});
+
+// Deploy the contract
+const txHash = await deployContract(aaProvider, {
+  bytecode: contractBytecode,
+  constructorArgs: [arg1, arg2]
+});
+```
+
+### Gas Management
+
+Optimized gas estimation and pricing:
+
+```typescript
+// Get detailed gas estimation
+const gasEstimate = await estimateGas(provider, to, value, data);
+
+// Get optimized gas prices
+const feeData = await provider.getFeeData();
+```
+
+## Browser Compatibility
+
+**EOA Provider**: All modern browsers with wallet extensions
+
+**Passkey Provider**:
+- Chrome/Edge: Version 67+
+- Safari: Version 14+
+- Firefox: Version 60+
+- Mobile: iOS 15+ (Safari), Android 7+ (Chrome)
+
+## Documentation
+
+📚 **[Complete Implementation Guide](docs/UI-SDK-GUIDE.md)**
+
+For detailed implementation instructions, configuration options, and advanced usage patterns, see our comprehensive guide:
+
+- **[Configuration](docs/UI-SDK-GUIDE.md#configuration)** - Setup and configuration options
+- **[EOA Provider Guide](docs/UI-SDK-GUIDE.md#creating-an-eoa-based-account-abstraction-provider)** - Integrate existing wallets
+- **[Passkey Provider Guide](docs/UI-SDK-GUIDE.md#creating-a-passkey-based-account-abstraction-provider)** - Passwordless authentication
+- **[Transaction Operations](docs/UI-SDK-GUIDE.md#transaction-operations)** - Single and batch transactions
+- **[Contract Deployment](docs/UI-SDK-GUIDE.md#contract-deployment)** - Smart contract deployment
+- **[Gas Management](docs/UI-SDK-GUIDE.md#gas-management)** - Gas estimation and optimization
+
+## Examples
+
+Check out our example implementations:
+
+- **MetaMask Integration**: Standard EOA provider setup
+- **WalletConnect Integration**: Multi-wallet support
+- **Passkey Authentication**: Complete biometric authentication flow
+- **Batch Operations**: Multiple transaction execution
+- **Contract Deployment**: Deterministic contract addresses
+
+## Support
+
+For questions, issues, or contributions, please refer to our [documentation](docs/UI-SDK-GUIDE.md) or open an issue in this repository.
+
+---
+
+**UI-SDK** - Enabling the future of user-friendly blockchain interactions through Account Abstraction.
