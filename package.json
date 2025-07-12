@@ -1,6 +1,6 @@
 {
   "name": "ui-sdk",
-  "version": "0.6.6",
+  "version": "0.6.7",
   "main": "./dist/src/index.js",
   "license": "MIT",
   "files": [
@@ -22,6 +22,7 @@
     "@ethersproject/properties": "^5.7.0",
     "@ethersproject/providers": "^5.7.0",
     "@types/debug": "^4.1.7",
+    "base64url": "^3.0.1",
     "debug": "^4.3.4",
     "ethers": "^5.7.0"
   },
