@@ -1,10 +1,9 @@
 import { BigNumber, BigNumberish } from 'ethers'
 import {AddressZero, HashZero} from "@ethersproject/constants"
-import {
-  SimpleAccount,
-  SimpleAccount__factory, SimpleAccountFactory,
-  SimpleAccountFactory__factory
-} from '@account-abstraction/contracts'
+import { SimpleAccount } from './contracts/SimpleAccount'
+import { SimpleAccountFactory } from './contracts/SimpleAccountFactory'
+import { SimpleAccount__factory } from './contracts/factories/SimpleAccount__factory'
+import { SimpleAccountFactory__factory } from './contracts/factories/SimpleAccountFactory__factory' 
 
 import { arrayify, hexlify, zeroPad, hexConcat, Interface } from 'ethers/lib/utils'
 import { Signer } from '@ethersproject/abstract-signer'

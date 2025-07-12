@@ -1,9 +1,9 @@
 import { JsonRpcProvider } from '@ethersproject/providers'
 import { ethers } from 'ethers'
 import { resolveProperties } from 'ethers/lib/utils'
-import { UserOperationStruct } from '@account-abstraction/contracts'
+import { UserOperationStruct } from './contracts/EntryPoint'
 import Debug from 'debug'
-import { deepHexlify } from '@account-abstraction/utils'
+import { deepHexlify } from './utils/ERC4337Utils'
 
 const debug = Debug('aa.rpc')
 

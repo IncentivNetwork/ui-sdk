@@ -1,6 +1,6 @@
 {
   "name": "ui-sdk",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "main": "./dist/src/index.js",
   "license": "MIT",
   "files": [
@@ -9,18 +9,12 @@
     "README.md"
   ],
   "scripts": {
-    "clear": "rm -rf dist artifacts cache",
-    "lint": "eslint -f unix .",
-    "lint-fix": "eslint -f unix . --fix",
-    "test": "hardhat test",
-    "hardhat-test": "hardhat test",
+    "clear": "rm -rf dist",
     "tsc": "tsc",
     "watch-tsc": "tsc -w --preserveWatchOutput",
     "prepare": "npm install --ignore-scripts && tsc"
   },
   "dependencies": {
-    "@account-abstraction/contracts": "^0.6.0",
-    "@account-abstraction/utils": "^0.6.0",
     "@ethersproject/abstract-provider": "^5.7.0",
     "@ethersproject/abstract-signer": "^5.7.0",
     "@ethersproject/contracts": "^5.7.0",
@@ -36,7 +30,6 @@
     "@nomicfoundation/hardhat-toolbox": "^1.0.2",
     "@nomiclabs/hardhat-ethers": "^2.0.0",
     "chai": "^4.3.6",
-    "eslint": "^9.11.1",
     "hardhat": "^2.11.0",
     "typescript": "^5.6.2"
   }

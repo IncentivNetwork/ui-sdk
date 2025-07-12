@@ -1,14 +1,12 @@
 import { ethers, BigNumber, BigNumberish } from 'ethers'
 import { Provider } from '@ethersproject/providers'
-import {
-  EntryPoint, EntryPoint__factory,
-  UserOperationStruct
-} from '@account-abstraction/contracts'
+import { EntryPoint, UserOperationStruct } from './contracts/EntryPoint'
+import { EntryPoint__factory } from './contracts/factories/EntryPoint__factory'
 
 import { TransactionDetailsForUserOp, BatchTransactionDetailsForUserOp } from './TransactionDetailsForUserOp'
 import { resolveProperties } from 'ethers/lib/utils'
 import { PaymasterAPI } from './PaymasterAPI'
-import { getUserOpHash, NotPromise, packUserOp } from '@account-abstraction/utils'
+import { getUserOpHash, NotPromise, packUserOp } from './utils/ERC4337Utils'
 import { calcPreVerificationGas, GasOverheads } from './calcPreVerificationGas'
 import { SignatureMode } from './SignatureMode'
 import { HttpRpcClient } from './HttpRpcClient'

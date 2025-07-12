@@ -1,5 +1,5 @@
-import { UserOperationStruct } from '@account-abstraction/contracts'
-import { NotPromise, packUserOp } from '@account-abstraction/utils'
+import { UserOperationStruct } from './contracts/EntryPoint'
+import { NotPromise, packUserOp } from './utils/ERC4337Utils'
 import { arrayify, hexlify } from 'ethers/lib/utils'
 import { SignatureMode } from './SignatureMode'
 import Debug from 'debug'

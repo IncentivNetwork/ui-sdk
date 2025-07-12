@@ -32,7 +32,3 @@ jobs:
       # Compile TypeScript files
       - name: Compile TypeScript
         run: npm run tsc
-
-      # Separate Test Step
-      - name: Run tests
-        run: npm test

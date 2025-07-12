@@ -6,7 +6,7 @@ import { Bytes, BigNumber, BigNumberish } from 'ethers'
 import { ERC4337EthersProvider } from './ERC4337EthersProvider'
 import { ClientConfig } from './ClientConfig'
 import { HttpRpcClient } from './HttpRpcClient'
-import { UserOperationStruct } from '@account-abstraction/contracts'
+import { UserOperationStruct } from './contracts/EntryPoint'
 import { BaseAccountAPI } from './BaseAccountAPI'
 import Debug from 'debug'
 
