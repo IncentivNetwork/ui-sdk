@@ -35,7 +35,7 @@ UI-SDK transforms how users interact with blockchain applications by enabling **
 ### Installation
 
 ```bash
-npm install ui-sdk ethers@5.7.2
+npm install @incentiv/ui-sdk ethers@5.7.2
 ```
 
 ### EOA Provider (MetaMask, WalletConnect, etc.)
@@ -44,7 +44,7 @@ Transform your existing wallet into a smart contract wallet:
 
 ```typescript
 import { ethers } from 'ethers';
-import { getEoaProvider } from 'ui-sdk';
+import { getEoaProvider } from '@incentiv/ui-sdk';
 
 // Works with any existing provider
 const baseProvider = new ethers.providers.Web3Provider(window.ethereum);
@@ -70,7 +70,7 @@ Create a passwordless wallet experience:
 
 ```typescript
 import { ethers } from 'ethers';
-import { getPasskeyProvider, registerPasskey, WebAuthnPublicKey } from 'ui-sdk';
+import { getPasskeyProvider, registerPasskey, WebAuthnPublicKey } from '@incentiv/ui-sdk';
 
 // 1. Register a new passkey
 const registrationResult = await registerPasskey(
@@ -125,7 +125,7 @@ const txResponse = await signer.sendBatchTransaction({
 Deploy contracts with deterministic addresses:
 
 ```typescript
-import { deployContract, predictContractAddress } from 'ui-sdk';
+import { deployContract, predictContractAddress } from '@incentiv/ui-sdk';
 
 // Predict address before deployment
 const predictedAddress = await predictContractAddress(aaProvider, {

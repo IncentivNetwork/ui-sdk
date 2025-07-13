@@ -1,6 +1,6 @@
 {
-  "name": "ui-sdk",
-  "version": "0.6.7",
+  "name": "@incentiv/ui-sdk",
+  "version": "0.6.8",
   "main": "./dist/src/index.js",
   "license": "MIT",
   "files": [
@@ -13,6 +13,10 @@
     "tsc": "tsc",
     "watch-tsc": "tsc -w --preserveWatchOutput",
     "prepare": "npm install --ignore-scripts && tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/IncentivNetwork/ui-sdk"
   },
   "dependencies": {
     "@ethersproject/abstract-provider": "^5.7.0",

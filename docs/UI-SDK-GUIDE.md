@@ -55,9 +55,9 @@ For Passkey-based authentication:
 ## Installation
 
 ```bash
-npm install ui-sdk ethers@5.7.2
+npm install @incentiv/ui-sdk ethers@5.7.2
 # or
-yarn add ui-sdk ethers@5.7.2
+yarn add @incentiv/ui-sdk ethers@5.7.2
 ```
 
 ## Account Abstraction Providers
@@ -94,7 +94,7 @@ The EOA provider:
 
 ```javascript
 import { ethers } from 'ethers';
-import { getEoaProvider } from 'ui-sdk';
+import { getEoaProvider } from '@incentiv/ui-sdk';
 
 const createEoaProvider = async () => {
   // You can use any base provider - MetaMask, WalletConnect, etc.
@@ -145,7 +145,7 @@ The passkey provider:
 
 ```javascript
 import { ethers } from 'ethers';
-import { getPasskeyProvider, WebAuthnPublicKey } from 'ui-sdk';
+import { getPasskeyProvider, WebAuthnPublicKey } from '@incentiv/ui-sdk';
 
 const createPasskeyProvider = async (credential) => {
   // Create a base provider using StaticJsonRpcProvider
@@ -172,7 +172,7 @@ const createPasskeyProvider = async (credential) => {
 The `WebAuthnCredential` object contains the passkey information needed to create a provider:
 
 ```javascript
-import { WebAuthnCredential } from 'ui-sdk';
+import { WebAuthnCredential } from '@incentiv/ui-sdk';
 
 // WebAuthnCredential type structure:
 // {
@@ -188,7 +188,7 @@ The passkey account creation process involves registration, server communication
 #### Step 1: Register the Passkey
 
 ```javascript
-import { registerPasskey, WebAuthnPublicKey } from 'ui-sdk';
+import { registerPasskey, WebAuthnPublicKey } from '@incentiv/ui-sdk';
 
 const registerNewPasskey = async (passkeyName, challenge, userId) => {
   try {
@@ -267,7 +267,7 @@ const completePasskeyRegistration = async (passkeyName) => {
 #### Step 3: Login with Passkey
 
 ```javascript
-import { signPasskeyLoginChallenge } from 'ui-sdk';
+import { signPasskeyLoginChallenge } from '@incentiv/ui-sdk';
 
 const loginWithPasskey = async () => {
   try {
@@ -496,7 +496,7 @@ Key features:
 One of the key features is the ability to predict the contract address before deployment:
 
 ```javascript
-import { predictContractAddress, deployContract } from 'ui-sdk';
+import { predictContractAddress, deployContract } from '@incentiv/ui-sdk';
 
 // Predict address before deployment
 const predictedAddress = await predictContractAddress(aaProvider, {
@@ -532,7 +532,7 @@ The UI-SDK supports two deployment methods:
 
 1. Using ContractFactory:
 ```javascript
-import { deployContract } from 'ui-sdk';
+import { deployContract } from '@incentiv/ui-sdk';
 
 const factory = new ethers.ContractFactory(abi, bytecode, aaProvider.getSigner());
 const txHash = await deployContract(aaProvider, factory);
@@ -562,7 +562,7 @@ await aaProvider.waitForTransaction(txHash);
 Before deployment, you can estimate the gas cost:
 
 ```javascript
-import { estimateDeploymentGas } from 'ui-sdk';
+import { estimateDeploymentGas } from '@incentiv/ui-sdk';
 
 const gasEstimate = await estimateDeploymentGas(aaProvider, {
   bytecode: contractBytecode,
