@@ -1,15 +1,20 @@
-import { BigNumber, BigNumberish } from 'ethers'
-import {AddressZero, HashZero} from "@ethersproject/constants"
-import { SimpleAccount } from './contracts/SimpleAccount'
-import { SimpleAccountFactory } from './contracts/SimpleAccountFactory'
-import { SimpleAccount__factory } from './contracts/factories/SimpleAccount__factory'
-import { SimpleAccountFactory__factory } from './contracts/factories/SimpleAccountFactory__factory' 
+import { BigNumber, BigNumberish, ethers } from 'ethers'
 
-import { arrayify, hexlify, zeroPad, hexConcat, Interface } from 'ethers/lib/utils'
+import { IncentivAccount } from './contracts/IncentivAccount'
+import { IncentivAccount__factory } from './contracts/factories/IncentivAccount__factory'
+import { IncentivAccountFactory } from './contracts/IncentivAccountFactory'
+import { IncentivAccountFactory__factory } from './contracts/factories/IncentivAccountFactory__factory'
+
+import { hexlify, zeroPad, arrayify, hexConcat } from 'ethers/lib/utils'
 import { Signer } from '@ethersproject/abstract-signer'
-import { BaseApiParams, BaseAccountAPI } from './BaseAccountAPI'
-import { SignatureMode } from './SignatureMode'
-import { hasPublicKey } from './utils'
+import { BaseApiParams, BaseAccountAPI, FactoryParams } from './BaseAccountAPI'
+import { SignatureMode } from './utils/Types'
+
+function hasPublicKey(owner: any): owner is { publicKey: { x: string; y: string } } {
+  return owner && owner.publicKey &&
+         typeof owner.publicKey.x === 'string' &&
+         typeof owner.publicKey.y === 'string'
+}
 
 /**
  * constructor params, added no top of base params:
@@ -24,7 +29,7 @@ export interface SimpleAccountApiParams extends BaseApiParams {
 }
 
 /**
- * An implementation of the BaseAccountAPI using the SimpleAccount contract.
+ * An implementation of the BaseAccountAPI using the IncentivAccount contract.
  * - contract deployer gets "entrypoint", "owner" addresses and "index" nonce
  * - owner signs requests using normal "Ethereum Signed Message" (ether's signer.signMessage())
  * - nonce method is "nonce()"
@@ -39,9 +44,9 @@ export class SimpleAccountAPI extends BaseAccountAPI {
    * our account contract.
    * should support the "execFromEntryPoint" and "nonce" methods
    */
-  accountContract?: SimpleAccount
+  accountContract?: IncentivAccount
 
-  factory?: SimpleAccountFactory
+  factory?: IncentivAccountFactory
 
   constructor (params: SimpleAccountApiParams) {
     super(params)
@@ -50,9 +55,9 @@ export class SimpleAccountAPI extends BaseAccountAPI {
     this.index = BigNumber.from(params.index ?? 0)
   }
 
-  async _getAccountContract (): Promise<SimpleAccount> {
+  async _getAccountContract (): Promise<IncentivAccount> {
     if (this.accountContract == null) {
-      this.accountContract = SimpleAccount__factory.connect(await this.getAccountAddress(), this.provider)
+      this.accountContract = IncentivAccount__factory.connect(await this.getAccountAddress(), this.provider)
     }
     return this.accountContract
   }
@@ -61,54 +66,25 @@ export class SimpleAccountAPI extends BaseAccountAPI {
    * return the value to put into the "initCode" field, if the account is not yet deployed.
    * this value holds the "factory" address, followed by this account's information
    */
-
-  async getAccountInitCode (): Promise<string> {
-    if (!this.factory) {
-      if (this.factoryAddress) {
-        this.factory = SimpleAccountFactory__factory.connect(this.factoryAddress, this.provider)
+  async getFactoryData (): Promise<FactoryParams | null> {
+    if (this.factory == null) {
+      if (this.factoryAddress != null && this.factoryAddress !== '') {
+        this.factory = IncentivAccountFactory__factory.connect(this.factoryAddress, this.provider)
       } else {
-        throw new Error('No factory to get initCode')
+        throw new Error('no factory to get initCode')
       }
     }
 
-    const createAccountAbi = [
-      'function createAccount(address owner, bytes32[2] memory publicKey, uint256 salt) external payable returns (SimpleAccount)',
-    ]
+    const params = (
+      hasPublicKey(await this.owner) ? 
+      [ethers.constants.AddressZero, [(this.owner as any).publicKey.x, (this.owner as any).publicKey.y], this.index] : 
+      [await this.owner.getAddress(), [ethers.constants.HashZero, ethers.constants.HashZero], this.index]
+    ) as [string, [string, string], BigNumberish]
 
-    let createAccountParams: any
-
-    // Check if the owner has a publicKey property (indicating a Passkey account)
-    if (hasPublicKey(this.owner as any)) {
-      const publicKey = (this.owner as any).publicKey
-
-      // Provide the public key and set owner to zero address
-      createAccountParams = [
-        AddressZero,
-        [
-          publicKey.x, // Hex string for public key's X coordinate
-          publicKey.y // Hex string for public key's Y coordinate
-        ],
-        this.index
-      ];
-    } else {
-      // Fetch the owner address (EOA account)
-      const ownerAddress = await this.owner.getAddress()
-
-      // Provide owner address and set publicKey to zeros
-      createAccountParams = [
-        ownerAddress,
-        [HashZero, HashZero],
-        this.index
-      ]
+    return {
+      factory: this.factory.address,
+      factoryData: this.factory.interface.encodeFunctionData('createAccount', params)
     }
-
-    // Create ethers Interface using the ABI
-    const createAccountInterface = new Interface(createAccountAbi)
-
-    // Encode function data using the ABI and parameters
-    const encodedFunctionData = createAccountInterface.encodeFunctionData('createAccount', createAccountParams)
-
-    return hexConcat([this.factory.address, encodedFunctionData])
   }
 
   async getNonce (): Promise<BigNumber> {
@@ -143,19 +119,33 @@ export class SimpleAccountAPI extends BaseAccountAPI {
    * @param datas array of call data
    */
   async encodeExecuteBatch (targets: string[], values: BigNumberish[], datas: string[]): Promise<string> {
-    const iface = new Interface([
-      'function executeBatch(address[] calldata dest, uint256[] calldata value, bytes[] calldata func) external'
-    ])
-    return iface.encodeFunctionData('executeBatch', [targets, values, datas])
+    const accountContract = await this._getAccountContract()
+    return accountContract.interface.encodeFunctionData(
+      'executeBatch',
+      [
+        targets, 
+        values, 
+        datas
+      ])
   }
 
   async signUserOpHash (userOpHash: string): Promise<string> {
     const signedMessage = await this.owner.signMessage(arrayify(userOpHash))
+    
+    // Insert version byte (EOA = 0, Passkey = 1)
     const versionBytes = zeroPad(
       hexlify(hasPublicKey(this.owner) ? 1 : 0),
-      1 // Zero-pad to 1 byte
+      1
     )
-    return hexConcat([versionBytes, signedMessage])
+
+    // Insert Wallet ID, 0 if not set (2 bytes)
+    let walletId = (this.owner as any).walletId || 1;
+    const walletIdBytes = zeroPad(
+      hexlify(walletId),
+      2
+    )
+
+    return hexConcat([versionBytes, walletIdBytes, signedMessage])
   }
 
   /**

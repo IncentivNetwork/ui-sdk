@@ -77,17 +77,6 @@ export class ContractDeployer {
       // Create and sign the UserOperation using the smart account
       const userOperation = await this.provider.smartAccountAPI.createSignedUserOp(userOpDetails);
 
-      debug('UserOperation created:', {
-        sender: userOperation.sender,
-        nonce: userOperation.nonce.toString(),
-        initCode: userOperation.initCode,
-        callData: typeof userOperation.callData === 'string' && userOperation.callData.length > 100 ?
-          userOperation.callData.substring(0, 100) + '...' :
-          userOperation.callData,
-        callGasLimit: userOperation.callGasLimit.toString(),
-        verificationGasLimit: userOperation.verificationGasLimit.toString()
-      });
-
       // Get transaction response for tracking
       const transactionResponse = await this.provider.constructUserOpTransactionResponse(userOperation);
 

@@ -1,15 +1,19 @@
-import { UserOperationStruct } from './contracts/EntryPoint'
-import { NotPromise, packUserOp } from './utils/ERC4337Utils'
+import { encodeUserOp, packUserOp, UserOperation } from './utils/ERC4337Utils'
 import { arrayify, hexlify } from 'ethers/lib/utils'
-import { SignatureMode } from './SignatureMode'
-import Debug from 'debug'
-
-const debug = Debug('aa.gas')
+import { SignatureMode } from './utils/Types'
 
 // Signature sizes for different types
 export const SignatureSizes = {
   EOA: 65,      // r,s,v signature (32 + 32 + 1)
-  PASSKEY: 536  // Passkey signature size
+  PASSKEY: 675  // Passkey signature size
+}
+
+export const getDummySignature = (signatureMode: SignatureMode) => {
+  return (
+    signatureMode === SignatureMode.PASSKEY ?
+    '0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c' :
+    '0xfffffffffffffffffffffffffffffff0000000000000000000000000000000007aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1c'
+  )
 }
 
 export interface GasOverheads {
@@ -68,48 +72,29 @@ export const DefaultGasOverheads: GasOverheads = {
  * @param userOp filled userOp to calculate. The only possible missing fields can be the signature and preVerificationGas itself
  * @param overheads gas overheads to use, to override the default values
  */
-export function calcPreVerificationGas(userOp: Partial<NotPromise<UserOperationStruct>>, overheads?: Partial<GasOverheads>): number {
-  debug('Calculating preVerificationGas...')
-
+export function calcPreVerificationGas (userOp: Partial<UserOperation>, overheads?: Partial<GasOverheads>): number {
   const ov = { ...DefaultGasOverheads, ...(overheads ?? {}) }
-
-  // Determine signature size based on signature mode
-  const sigSize = ov.signatureMode === SignatureMode.PASSKEY ?
+  
+  const sigSize = 
+    ov.signatureMode === SignatureMode.PASSKEY ?
     SignatureSizes.PASSKEY :
     SignatureSizes.EOA
 
-  debug('Using signature mode:', ov.signatureMode, 'with size:', sigSize)
-
-  const p: NotPromise<UserOperationStruct> = {
-    preVerificationGas: 21000,
-    signature: hexlify(Buffer.alloc(sigSize, 1)),
+  const p: UserOperation = {
+    // dummy values, in case the UserOp is incomplete.
+    preVerificationGas: 21000, // dummy value, just for calldata cost
+    signature: hexlify(Buffer.alloc(sigSize, 1)), // dummy signature
     ...userOp
   } as any
 
-  const packed = arrayify(packUserOp(p, false))
+  const packed = arrayify(encodeUserOp(packUserOp(p), false))
   const lengthInWord = (packed.length + 31) / 32
   const callDataCost = packed.map(x => x === 0 ? ov.zeroByte : ov.nonZeroByte).reduce((sum, x) => sum + x)
-
-  const baseGas = ov.fixed / ov.bundleSize
-  const userOpGas = ov.perUserOp
-  const wordGas = ov.perUserOpWord * lengthInWord
-
   const ret = Math.round(
     callDataCost +
-    baseGas +
-    userOpGas +
-    wordGas
+    ov.fixed / ov.bundleSize +
+    ov.perUserOp +
+    ov.perUserOpWord * lengthInWord
   )
-
-  debug('Gas calculation:', {
-    sigSize,
-    signatureMode: ov.signatureMode,
-    baseGas,
-    userOpGas,
-    wordGas,
-    callDataCost,
-    total: ret
-  })
-
-  return Math.max(ret, 49024)  // Ensure we never return less than the bundler minimum
+  return Math.max(ret, 50000)
 }

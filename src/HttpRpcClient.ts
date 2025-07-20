@@ -1,9 +1,8 @@
 import { JsonRpcProvider } from '@ethersproject/providers'
 import { ethers } from 'ethers'
 import { resolveProperties } from 'ethers/lib/utils'
-import { UserOperationStruct } from './contracts/EntryPoint'
+import { deepHexlify, UserOperation } from './utils/ERC4337Utils'
 import Debug from 'debug'
-import { deepHexlify } from './utils/ERC4337Utils'
 
 const debug = Debug('aa.rpc')
 
@@ -38,10 +37,10 @@ export class HttpRpcClient {
    * @param userOp1
    * @return userOpHash the id of this operation, for getUserOperationTransaction
    */
-  async sendUserOpToBundler (userOp1: UserOperationStruct): Promise<string> {
+  async sendUserOpToBundler (userOp1: UserOperation): Promise<string> {
     await this.initializing
     const hexifiedUserOp = deepHexlify(await resolveProperties(userOp1))
-    const jsonRequestData: [UserOperationStruct, string] = [hexifiedUserOp, this.entryPointAddress]
+    const jsonRequestData: [UserOperation, string] = [hexifiedUserOp, this.entryPointAddress]
     await this.printUserOperation('eth_sendUserOperation', jsonRequestData)
     return await this.userOpJsonRpcProvider
       .send('eth_sendUserOperation', [hexifiedUserOp, this.entryPointAddress])
@@ -49,59 +48,19 @@ export class HttpRpcClient {
 
   /**
    * estimate gas requirements for UserOperation
-   * @todo change verificationGas to verificationGasLimit when the tests in the bundler are changed
    * @param userOp1
    * @returns latest gas suggestions made by the bundler.
    */
-  async estimateUserOpGas(userOp1: Partial<UserOperationStruct>): Promise<{
-    callGasLimit: number
-    preVerificationGas: number
-    verificationGas: number
-    maxFeePerGas: number
-    maxPriorityFeePerGas: number
-    success: boolean
-    error?: string
-  }> {
-    try {
-      await this.initializing
-      const hexifiedUserOp = deepHexlify(await resolveProperties(userOp1))
-
-      debug('Sending estimation request: %o', {
-        sender: hexifiedUserOp.sender,
-        nonce: hexifiedUserOp.nonce,
-        initCode: hexifiedUserOp.initCode?.length > 2 ? 'present' : 'none',
-        callData: hexifiedUserOp.callData?.length > 2 ? 'present' : 'none'
-      })
-
-      const result = await this.userOpJsonRpcProvider
-        .send('eth_estimateUserOperationGas', [hexifiedUserOp, this.entryPointAddress])
-        .catch(error => {
-          debug('Estimation failed: %s', error instanceof Error ? error.message : 'Unknown error')
-          throw error
-        })
-
-      debug('Estimation response: %o', result)
-      return {
-        ...result,
-        success: true
-      }
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      debug('Estimation error: %s', errorMessage)
-      return {
-        callGasLimit: 0,
-        preVerificationGas: 0,
-        verificationGas: 0,
-        maxFeePerGas: 0,
-        maxPriorityFeePerGas: 0,
-        error: errorMessage,
-        success: false
-      }
-    }
+  async estimateUserOpGas (userOp1: Partial<UserOperation>): Promise<{callGasLimit: number, preVerificationGas: number, verificationGasLimit: number}> {
+    await this.initializing
+    const hexifiedUserOp = deepHexlify(userOp1)
+    const jsonRequestData: [UserOperation, string] = [hexifiedUserOp, this.entryPointAddress]
+    await this.printUserOperation('eth_estimateUserOperationGas', jsonRequestData)
+    return await this.userOpJsonRpcProvider
+      .send('eth_estimateUserOperationGas', [hexifiedUserOp, this.entryPointAddress])
   }
 
-  private async printUserOperation (method: string, [userOp1, entryPointAddress]: [UserOperationStruct, string]): Promise<void> {
-    const userOp = await resolveProperties(userOp1)
+  private async printUserOperation (method: string, [userOp, entryPointAddress]: [UserOperation, string]): Promise<void> {
     debug('sending', method, {
       ...userOp
       // initCode: (userOp.initCode ?? '').length,

@@ -1,7 +1,7 @@
 import { BigNumberish, Event } from 'ethers'
 import { TransactionReceipt } from '@ethersproject/providers'
-import { EntryPoint } from './contracts/EntryPoint'
 import { defaultAbiCoder } from 'ethers/lib/utils'
+import { IEntryPoint } from './contracts/interfaces/IEntryPoint'
 import Debug from 'debug'
 
 const debug = Debug('aa.listener')
@@ -19,7 +19,7 @@ export class UserOperationEventListener {
   constructor (
     readonly resolve: (t: TransactionReceipt) => void,
     readonly reject: (reason?: any) => void,
-    readonly entryPoint: EntryPoint,
+    readonly entryPoint: IEntryPoint,
     readonly sender: string,
     readonly userOpHash: string,
     readonly nonce?: BigNumberish,

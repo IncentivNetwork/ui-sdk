@@ -62,7 +62,7 @@ export type PackedUserOperationStructOutput = [
   signature: string;
 };
 
-export interface SimpleAccountInterface extends utils.Interface {
+export interface IncentivAccountInterface extends utils.Interface {
   functions: {
     "UPGRADE_INTERFACE_VERSION()": FunctionFragment;
     "addDeposit()": FunctionFragment;
@@ -71,13 +71,20 @@ export interface SimpleAccountInterface extends utils.Interface {
     "executeBatch(address[],uint256[],bytes[])": FunctionFragment;
     "getDeposit()": FunctionFragment;
     "getNonce()": FunctionFragment;
-    "initialize(address)": FunctionFragment;
+    "initialize(address,bytes32[2])": FunctionFragment;
+    "isValidSignature(bytes32,bytes)": FunctionFragment;
     "onERC1155BatchReceived(address,address,uint256[],uint256[],bytes)": FunctionFragment;
     "onERC1155Received(address,address,uint256,uint256,bytes)": FunctionFragment;
     "onERC721Received(address,address,uint256,bytes)": FunctionFragment;
     "owner()": FunctionFragment;
     "proxiableUUID()": FunctionFragment;
+    "publicKey()": FunctionFragment;
+    "recoveryAddress()": FunctionFragment;
+    "rewardDistribution()": FunctionFragment;
+    "setRecoveryAddress(address)": FunctionFragment;
+    "setRecoveryAddressWithPermit(address,bytes)": FunctionFragment;
     "supportsInterface(bytes4)": FunctionFragment;
+    "transferGate()": FunctionFragment;
     "upgradeToAndCall(address,bytes)": FunctionFragment;
     "validateUserOp((address,uint256,bytes,bytes,bytes32,uint256,bytes32,bytes,bytes),bytes32,uint256)": FunctionFragment;
     "withdrawDepositTo(address,uint256)": FunctionFragment;
@@ -93,12 +100,19 @@ export interface SimpleAccountInterface extends utils.Interface {
       | "getDeposit"
       | "getNonce"
       | "initialize"
+      | "isValidSignature"
       | "onERC1155BatchReceived"
       | "onERC1155Received"
       | "onERC721Received"
       | "owner"
       | "proxiableUUID"
+      | "publicKey"
+      | "recoveryAddress"
+      | "rewardDistribution"
+      | "setRecoveryAddress"
+      | "setRecoveryAddressWithPermit"
       | "supportsInterface"
+      | "transferGate"
       | "upgradeToAndCall"
       | "validateUserOp"
       | "withdrawDepositTo"
@@ -139,7 +153,14 @@ export interface SimpleAccountInterface extends utils.Interface {
   encodeFunctionData(functionFragment: "getNonce", values?: undefined): string;
   encodeFunctionData(
     functionFragment: "initialize",
-    values: [PromiseOrValue<string>]
+    values: [
+      PromiseOrValue<string>,
+      [PromiseOrValue<BytesLike>, PromiseOrValue<BytesLike>]
+    ]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "isValidSignature",
+    values: [PromiseOrValue<BytesLike>, PromiseOrValue<BytesLike>]
   ): string;
   encodeFunctionData(
     functionFragment: "onERC1155BatchReceived",
@@ -175,9 +196,30 @@ export interface SimpleAccountInterface extends utils.Interface {
     functionFragment: "proxiableUUID",
     values?: undefined
   ): string;
+  encodeFunctionData(functionFragment: "publicKey", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "recoveryAddress",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "rewardDistribution",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setRecoveryAddress",
+    values: [PromiseOrValue<string>]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setRecoveryAddressWithPermit",
+    values: [PromiseOrValue<string>, PromiseOrValue<BytesLike>]
+  ): string;
   encodeFunctionData(
     functionFragment: "supportsInterface",
     values: [PromiseOrValue<BytesLike>]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "transferGate",
+    values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "upgradeToAndCall",
@@ -211,6 +253,10 @@ export interface SimpleAccountInterface extends utils.Interface {
   decodeFunctionResult(functionFragment: "getNonce", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "initialize", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "isValidSignature",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "onERC1155BatchReceived",
     data: BytesLike
   ): Result;
@@ -227,8 +273,29 @@ export interface SimpleAccountInterface extends utils.Interface {
     functionFragment: "proxiableUUID",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "publicKey", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "recoveryAddress",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "rewardDistribution",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setRecoveryAddress",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "setRecoveryAddressWithPermit",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "supportsInterface",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "transferGate",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -245,15 +312,28 @@ export interface SimpleAccountInterface extends utils.Interface {
   ): Result;
 
   events: {
+    "IncentivAccountInitialized(address,address,bytes32[2])": EventFragment;
     "Initialized(uint64)": EventFragment;
-    "SimpleAccountInitialized(address,address)": EventFragment;
     "Upgraded(address)": EventFragment;
   };
 
+  getEvent(nameOrSignatureOrTopic: "IncentivAccountInitialized"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Initialized"): EventFragment;
-  getEvent(nameOrSignatureOrTopic: "SimpleAccountInitialized"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Upgraded"): EventFragment;
 }
+
+export interface IncentivAccountInitializedEventObject {
+  entryPoint: string;
+  owner: string;
+  publicKey: [string, string];
+}
+export type IncentivAccountInitializedEvent = TypedEvent<
+  [string, string, [string, string]],
+  IncentivAccountInitializedEventObject
+>;
+
+export type IncentivAccountInitializedEventFilter =
+  TypedEventFilter<IncentivAccountInitializedEvent>;
 
 export interface InitializedEventObject {
   version: BigNumber;
@@ -262,18 +342,6 @@ export type InitializedEvent = TypedEvent<[BigNumber], InitializedEventObject>;
 
 export type InitializedEventFilter = TypedEventFilter<InitializedEvent>;
 
-export interface SimpleAccountInitializedEventObject {
-  entryPoint: string;
-  owner: string;
-}
-export type SimpleAccountInitializedEvent = TypedEvent<
-  [string, string],
-  SimpleAccountInitializedEventObject
->;
-
-export type SimpleAccountInitializedEventFilter =
-  TypedEventFilter<SimpleAccountInitializedEvent>;
-
 export interface UpgradedEventObject {
   implementation: string;
 }
@@ -281,12 +349,12 @@ export type UpgradedEvent = TypedEvent<[string], UpgradedEventObject>;
 
 export type UpgradedEventFilter = TypedEventFilter<UpgradedEvent>;
 
-export interface SimpleAccount extends BaseContract {
+export interface IncentivAccount extends BaseContract {
   connect(signerOrProvider: Signer | Provider | string): this;
   attach(addressOrName: string): this;
   deployed(): Promise<this>;
 
-  interface: SimpleAccountInterface;
+  interface: IncentivAccountInterface;
 
   queryFilter<TEvent extends TypedEvent>(
     event: TypedEventFilter<TEvent>,
@@ -336,8 +404,15 @@ export interface SimpleAccount extends BaseContract {
 
     initialize(
       anOwner: PromiseOrValue<string>,
+      aPublicKey: [PromiseOrValue<BytesLike>, PromiseOrValue<BytesLike>],
       overrides?: Overrides & { from?: PromiseOrValue<string> }
     ): Promise<ContractTransaction>;
+
+    isValidSignature(
+      message: PromiseOrValue<BytesLike>,
+      signature: PromiseOrValue<BytesLike>,
+      overrides?: CallOverrides
+    ): Promise<[string] & { magicValue: string }>;
 
     onERC1155BatchReceived(
       arg0: PromiseOrValue<string>,
@@ -369,10 +444,31 @@ export interface SimpleAccount extends BaseContract {
 
     proxiableUUID(overrides?: CallOverrides): Promise<[string]>;
 
+    publicKey(
+      overrides?: CallOverrides
+    ): Promise<[string, string] & { x: string; y: string }>;
+
+    recoveryAddress(overrides?: CallOverrides): Promise<[string]>;
+
+    rewardDistribution(overrides?: CallOverrides): Promise<[string]>;
+
+    setRecoveryAddress(
+      newRecoveryAddress: PromiseOrValue<string>,
+      overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<ContractTransaction>;
+
+    setRecoveryAddressWithPermit(
+      newRecoveryAddress: PromiseOrValue<string>,
+      signature: PromiseOrValue<BytesLike>,
+      overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<ContractTransaction>;
+
     supportsInterface(
       interfaceId: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
     ): Promise<[boolean]>;
+
+    transferGate(overrides?: CallOverrides): Promise<[string]>;
 
     upgradeToAndCall(
       newImplementation: PromiseOrValue<string>,
@@ -422,8 +518,15 @@ export interface SimpleAccount extends BaseContract {
 
   initialize(
     anOwner: PromiseOrValue<string>,
+    aPublicKey: [PromiseOrValue<BytesLike>, PromiseOrValue<BytesLike>],
     overrides?: Overrides & { from?: PromiseOrValue<string> }
   ): Promise<ContractTransaction>;
+
+  isValidSignature(
+    message: PromiseOrValue<BytesLike>,
+    signature: PromiseOrValue<BytesLike>,
+    overrides?: CallOverrides
+  ): Promise<string>;
 
   onERC1155BatchReceived(
     arg0: PromiseOrValue<string>,
@@ -455,10 +558,31 @@ export interface SimpleAccount extends BaseContract {
 
   proxiableUUID(overrides?: CallOverrides): Promise<string>;
 
+  publicKey(
+    overrides?: CallOverrides
+  ): Promise<[string, string] & { x: string; y: string }>;
+
+  recoveryAddress(overrides?: CallOverrides): Promise<string>;
+
+  rewardDistribution(overrides?: CallOverrides): Promise<string>;
+
+  setRecoveryAddress(
+    newRecoveryAddress: PromiseOrValue<string>,
+    overrides?: Overrides & { from?: PromiseOrValue<string> }
+  ): Promise<ContractTransaction>;
+
+  setRecoveryAddressWithPermit(
+    newRecoveryAddress: PromiseOrValue<string>,
+    signature: PromiseOrValue<BytesLike>,
+    overrides?: Overrides & { from?: PromiseOrValue<string> }
+  ): Promise<ContractTransaction>;
+
   supportsInterface(
     interfaceId: PromiseOrValue<BytesLike>,
     overrides?: CallOverrides
   ): Promise<boolean>;
+
+  transferGate(overrides?: CallOverrides): Promise<string>;
 
   upgradeToAndCall(
     newImplementation: PromiseOrValue<string>,
@@ -506,8 +630,15 @@ export interface SimpleAccount extends BaseContract {
 
     initialize(
       anOwner: PromiseOrValue<string>,
+      aPublicKey: [PromiseOrValue<BytesLike>, PromiseOrValue<BytesLike>],
       overrides?: CallOverrides
     ): Promise<void>;
+
+    isValidSignature(
+      message: PromiseOrValue<BytesLike>,
+      signature: PromiseOrValue<BytesLike>,
+      overrides?: CallOverrides
+    ): Promise<string>;
 
     onERC1155BatchReceived(
       arg0: PromiseOrValue<string>,
@@ -539,10 +670,31 @@ export interface SimpleAccount extends BaseContract {
 
     proxiableUUID(overrides?: CallOverrides): Promise<string>;
 
+    publicKey(
+      overrides?: CallOverrides
+    ): Promise<[string, string] & { x: string; y: string }>;
+
+    recoveryAddress(overrides?: CallOverrides): Promise<string>;
+
+    rewardDistribution(overrides?: CallOverrides): Promise<string>;
+
+    setRecoveryAddress(
+      newRecoveryAddress: PromiseOrValue<string>,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
+    setRecoveryAddressWithPermit(
+      newRecoveryAddress: PromiseOrValue<string>,
+      signature: PromiseOrValue<BytesLike>,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
     supportsInterface(
       interfaceId: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
     ): Promise<boolean>;
+
+    transferGate(overrides?: CallOverrides): Promise<string>;
 
     upgradeToAndCall(
       newImplementation: PromiseOrValue<string>,
@@ -565,17 +717,19 @@ export interface SimpleAccount extends BaseContract {
   };
 
   filters: {
+    "IncentivAccountInitialized(address,address,bytes32[2])"(
+      entryPoint?: PromiseOrValue<string> | null,
+      owner?: PromiseOrValue<string> | null,
+      publicKey?: null
+    ): IncentivAccountInitializedEventFilter;
+    IncentivAccountInitialized(
+      entryPoint?: PromiseOrValue<string> | null,
+      owner?: PromiseOrValue<string> | null,
+      publicKey?: null
+    ): IncentivAccountInitializedEventFilter;
+
     "Initialized(uint64)"(version?: null): InitializedEventFilter;
     Initialized(version?: null): InitializedEventFilter;
-
-    "SimpleAccountInitialized(address,address)"(
-      entryPoint?: PromiseOrValue<string> | null,
-      owner?: PromiseOrValue<string> | null
-    ): SimpleAccountInitializedEventFilter;
-    SimpleAccountInitialized(
-      entryPoint?: PromiseOrValue<string> | null,
-      owner?: PromiseOrValue<string> | null
-    ): SimpleAccountInitializedEventFilter;
 
     "Upgraded(address)"(
       implementation?: PromiseOrValue<string> | null
@@ -614,7 +768,14 @@ export interface SimpleAccount extends BaseContract {
 
     initialize(
       anOwner: PromiseOrValue<string>,
+      aPublicKey: [PromiseOrValue<BytesLike>, PromiseOrValue<BytesLike>],
       overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<BigNumber>;
+
+    isValidSignature(
+      message: PromiseOrValue<BytesLike>,
+      signature: PromiseOrValue<BytesLike>,
+      overrides?: CallOverrides
     ): Promise<BigNumber>;
 
     onERC1155BatchReceived(
@@ -647,10 +808,29 @@ export interface SimpleAccount extends BaseContract {
 
     proxiableUUID(overrides?: CallOverrides): Promise<BigNumber>;
 
+    publicKey(overrides?: CallOverrides): Promise<BigNumber>;
+
+    recoveryAddress(overrides?: CallOverrides): Promise<BigNumber>;
+
+    rewardDistribution(overrides?: CallOverrides): Promise<BigNumber>;
+
+    setRecoveryAddress(
+      newRecoveryAddress: PromiseOrValue<string>,
+      overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<BigNumber>;
+
+    setRecoveryAddressWithPermit(
+      newRecoveryAddress: PromiseOrValue<string>,
+      signature: PromiseOrValue<BytesLike>,
+      overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<BigNumber>;
+
     supportsInterface(
       interfaceId: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
+
+    transferGate(overrides?: CallOverrides): Promise<BigNumber>;
 
     upgradeToAndCall(
       newImplementation: PromiseOrValue<string>,
@@ -703,7 +883,14 @@ export interface SimpleAccount extends BaseContract {
 
     initialize(
       anOwner: PromiseOrValue<string>,
+      aPublicKey: [PromiseOrValue<BytesLike>, PromiseOrValue<BytesLike>],
       overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<PopulatedTransaction>;
+
+    isValidSignature(
+      message: PromiseOrValue<BytesLike>,
+      signature: PromiseOrValue<BytesLike>,
+      overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
     onERC1155BatchReceived(
@@ -736,10 +923,31 @@ export interface SimpleAccount extends BaseContract {
 
     proxiableUUID(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
+    publicKey(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    recoveryAddress(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    rewardDistribution(
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    setRecoveryAddress(
+      newRecoveryAddress: PromiseOrValue<string>,
+      overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<PopulatedTransaction>;
+
+    setRecoveryAddressWithPermit(
+      newRecoveryAddress: PromiseOrValue<string>,
+      signature: PromiseOrValue<BytesLike>,
+      overrides?: Overrides & { from?: PromiseOrValue<string> }
+    ): Promise<PopulatedTransaction>;
+
     supportsInterface(
       interfaceId: PromiseOrValue<BytesLike>,
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
+
+    transferGate(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     upgradeToAndCall(
       newImplementation: PromiseOrValue<string>,
