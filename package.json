@@ -1,6 +1,6 @@
 {
   "name": "@incentiv/ui-sdk",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "main": "./dist/src/index.js",
   "license": "MIT",
   "files": [

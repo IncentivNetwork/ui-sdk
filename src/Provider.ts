@@ -25,7 +25,8 @@ export async function wrapProvider (
     entryPointAddress: entryPoint.address,
     owner: originalSigner,
     factoryAddress: config.factoryAddress,
-    paymasterAPI: config.paymasterAPI
+    paymasterAPI: config.paymasterAPI,
+    accountAddress: config.accountAddress
   })
   const chainId = await originalProvider.getNetwork().then(net => net.chainId)
   const httpRpcClient = new HttpRpcClient(config.bundlerUrl, config.entryPointAddress, chainId)

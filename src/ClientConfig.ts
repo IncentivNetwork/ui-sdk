@@ -47,4 +47,11 @@ export interface ClientConfig {
    * If not provided here, must be specified in individual deployment calls.
    */
   deployContractAddress?: string
+
+  /**
+   * The address of the account contract.
+   * If this is provided, it will be used directly.
+   * If not provided, the account address will be fetched using counterfactual address.
+   */
+  accountAddress?: string
 }
