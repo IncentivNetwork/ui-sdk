@@ -9,6 +9,7 @@ import { HttpRpcClient } from './HttpRpcClient'
 import { BaseAccountAPI } from './BaseAccountAPI'
 import { UserOperation } from './utils/ERC4337Utils'
 import { getDummySignature } from './calcPreVerificationGas'
+import { arrayify } from 'ethers/lib/utils'
 
 export interface BatchTransactionRequest {
   targets: string[]
@@ -144,7 +145,7 @@ export class ERC4337EthersSigner extends Signer {
       sender: await this.smartAccountAPI.getAccountAddress(),
       nonce: await this.smartAccountAPI.getNonce(),
       factory: factoryParams?.factory ?? undefined,
-      factoryData: Buffer.from(factoryParams?.factoryData ?? '').toString('hex') || undefined,
+      factoryData: Buffer.from(arrayify(factoryParams?.factoryData ?? '0x')).toString('hex') || undefined,
       paymaster: paymasterData?.paymaster || undefined,
       paymasterData: paymasterData?.paymasterData || undefined,
       callData,
