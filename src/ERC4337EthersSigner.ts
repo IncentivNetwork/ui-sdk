@@ -2,13 +2,14 @@ import { Deferrable, defineReadOnly } from '@ethersproject/properties'
 import { Provider, TransactionRequest, TransactionResponse } from '@ethersproject/providers'
 import { Signer } from '@ethersproject/abstract-signer'
 
-import { BigNumber, BigNumberish, Bytes } from 'ethers'
+import { BigNumber, BigNumberish, Bytes, ethers } from 'ethers'
 import { ERC4337EthersProvider } from './ERC4337EthersProvider'
 import { ClientConfig } from './ClientConfig'
 import { HttpRpcClient } from './HttpRpcClient'
 import { BaseAccountAPI } from './BaseAccountAPI'
 import { UserOperation } from './utils/ERC4337Utils'
 import { getDummySignature } from './calcPreVerificationGas'
+import { IncentivAccount__factory } from './contracts/factories/IncentivAccount__factory'
 import { arrayify } from 'ethers/lib/utils'
 
 export interface BatchTransactionRequest {
@@ -133,6 +134,95 @@ export class ERC4337EthersSigner extends Signer {
       convertedRequest.datas
     )
     return await this.estimateCalldataGas(callData)
+  }
+
+  /**
+   * Get the recovery address from the IncentivAccount contract
+   * @returns The recovery address
+   */
+  async getRecoveryAddress() {
+    if (!this.erc4337provider) return null;
+
+    // If it's not deployed yet, the recovery address is not set
+    if (await this.erc4337provider.smartAccountAPI.checkAccountPhantom())
+      return ethers.constants.AddressZero;
+
+    const incentivAccount = new ethers.Contract(
+      await this.erc4337provider.smartAccountAPI.getAccountAddress(),
+      IncentivAccount__factory.abi,
+      this.erc4337provider
+    );
+
+    return incentivAccount.recoveryAddress();
+  }
+
+  /**
+   * Set the recovery address in both IncentivAccount and AccountRecoveryMap simultaneously
+   * @dev The AccountRecoveryMap contract maps the recovery address to the account address
+   * @param recoveryAddress - The recovery address to set
+   * @param accountRecoveryMapAddress - The address of the AccountRecoveryMap contract
+   * @returns The transaction response
+   */
+  async setRecoveryAddress(recoveryAddress: string, accountRecoveryMapAddress: string) {
+    if (!this.erc4337provider) return null;
+
+    const incentivAccount = new ethers.Contract(
+      await this.erc4337provider.smartAccountAPI.getAccountAddress(),
+      IncentivAccount__factory.abi,
+      this.provider
+    );
+
+    // Encode setRecoveryAddress calldata for batch transaction in IncentivAccount and 
+    // AccountRecoveryMap. Both contracts have the same setRecoveryAddress function signature
+    const calldata = incentivAccount.interface.encodeFunctionData('setRecoveryAddress', [recoveryAddress]);
+    const batchCallRequest = {
+      targets: [
+        await this.erc4337provider.smartAccountAPI.getAccountAddress(),
+        accountRecoveryMapAddress
+      ],
+      datas: [
+        calldata,
+        calldata
+      ],
+      values: [
+        ethers.constants.Zero,
+        ethers.constants.Zero
+      ]
+    }
+
+    // Estimate the gas for the batch transaction
+    const gasEstimation = await this.estimateBatchUserOpGas(batchCallRequest);
+    const totalGas = BigNumber
+      .from(gasEstimation.callGasLimit)
+      .add(gasEstimation.verificationGasLimit)
+      .add(gasEstimation.preVerificationGas);
+
+    const feeData = await this.erc4337provider.getFeeData();
+
+    // Set recovery address in both IncentivAccount and AccountRecoveryMap simultaneously
+    return this.sendBatchTransaction({
+      ...batchCallRequest, 
+      gasLimit: totalGas,
+      maxFeePerGas: feeData.maxFeePerGas ?? undefined,
+      maxPriorityFeePerGas: feeData.maxPriorityFeePerGas ?? undefined
+    });
+  }
+
+  /**
+   * Get the account address from the AccountRecoveryMap contract
+   * @param address - The recovery address
+   * @param accountRecoveryMapAddress - The address of the AccountRecoveryMap contract
+   * @returns The account address
+   */
+  async getAccountForRecoveryAddress(address: string, accountRecoveryMapAddress: string) {
+    if (!this.erc4337provider) return null;
+
+    const accountRecoveryMap = new ethers.Contract(
+      accountRecoveryMapAddress,
+      IncentivAccount__factory.abi,
+      this.erc4337provider
+    );
+    return accountRecoveryMap.recoveryToAccount(address);
   }
 
   async estimateCalldataGas(callData: string): Promise<{callGasLimit: number, preVerificationGas: number, verificationGasLimit: number}> {   
