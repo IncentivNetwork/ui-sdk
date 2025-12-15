@@ -108,7 +108,7 @@ export class ERC4337EthersSigner extends Signer {
     // return transactionResponse
   }
 
-  async estimateUserOpGas(transaction: Deferrable<TransactionRequest>): Promise<{callGasLimit: number, preVerificationGas: number, verificationGasLimit: number}> {
+  async estimateUserOpGas(transaction: Deferrable<TransactionRequest>): Promise<{callGasLimit: number, preVerificationGas: number, verificationGasLimit: number, paymasterVerificationGasLimit: number}> {
     const tx: TransactionRequest = await this.populateTransaction(transaction)
     await this.verifyAllNecessaryFields(tx)
     const callData = await this.smartAccountAPI.encodeExecute(
@@ -119,7 +119,7 @@ export class ERC4337EthersSigner extends Signer {
     return await this.estimateCalldataGas(callData)
   }
 
-  async estimateBatchUserOpGas(batchRequest: BatchTransactionRequest): Promise<{callGasLimit: number, preVerificationGas: number, verificationGasLimit: number}> {
+  async estimateBatchUserOpGas(batchRequest: BatchTransactionRequest): Promise<{callGasLimit: number, preVerificationGas: number, verificationGasLimit: number, paymasterVerificationGasLimit: number}> {
     await this.verifyAllNecessaryBatchFields(batchRequest)
 
     const convertedRequest = {
@@ -225,7 +225,7 @@ export class ERC4337EthersSigner extends Signer {
     return accountRecoveryMap.recoveryToAccount(address);
   }
 
-  async estimateCalldataGas(callData: string): Promise<{callGasLimit: number, preVerificationGas: number, verificationGasLimit: number}> {   
+  async estimateCalldataGas(callData: string): Promise<{callGasLimit: number, preVerificationGas: number, verificationGasLimit: number, paymasterVerificationGasLimit: number}> {   
     const factoryParams = await this.smartAccountAPI.getRequiredFactoryData()
     // const initGas = await this.smartAccountAPI.estimateCreationGas(factoryParams)
     // const verificationGasLimit = BigNumber.from(await this.smartAccountAPI.getVerificationGasLimit()).add(initGas)
