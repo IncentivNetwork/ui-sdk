@@ -70,38 +70,23 @@ export const getPasskeyProvider = async (
         const responseType = '"type":"webauthn.get"';
         const responseTypeLocation = clientDataString.indexOf(responseType);
 
-        // Define the Signature struct as a tuple
-        const signatureType = {
-          components: [
-            { name: 'authenticatorData', type: 'bytes' },
-            { name: 'clientDataJSON', type: 'string' },
-            { name: 'challengeLocation', type: 'uint256' },
-            { name: 'responseTypeLocation', type: 'uint256' },
-            { name: 'r', type: 'uint256' },
-            { name: 's', type: 'uint256' },
-            { name: 'publicKeyX', type: 'uint256' },
-            { name: 'publicKeyY', type: 'uint256' }
-          ],
-          name: 'Signature',
-          type: 'tuple',
-        };
-
-        // Prepare the signature data as an object
-        const signatureStruct = {
-          authenticatorData: authenticatorData,
-          clientDataJSON: clientDataString,
-          challengeLocation: challengeLocation,
-          responseTypeLocation: responseTypeLocation,
-          r: ethers.BigNumber.from(r),
-          s: ethers.BigNumber.from(s),
-          publicKeyX: `0x${credential.publicKey.getX('hex')}`,
-          publicKeyY: `0x${credential.publicKey.getY('hex')}`,
-        };
-
         // Encode the Signature struct
-        const encodedSignature = ethers.utils.defaultAbiCoder.encode(
-          [signatureType as ethers.utils.ParamType],
-          [signatureStruct],
+        const encodedSignature = ethers.utils.solidityPack(
+          [
+            'uint32', 'bytes',
+            'bool',
+            'uint32', 'string',
+            'uint32',
+            'uint32',
+            'uint256', 'uint256'
+          ], [
+            authenticatorData.length, authenticatorData,
+            false,
+            clientDataString.length, clientDataString,
+            challengeLocation,
+            responseTypeLocation,
+            ethers.BigNumber.from(r), ethers.BigNumber.from(s)
+          ]
         );
 
         return encodedSignature;

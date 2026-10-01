@@ -2,15 +2,15 @@ import { Deferrable, defineReadOnly } from '@ethersproject/properties'
 import { Provider, TransactionRequest, TransactionResponse } from '@ethersproject/providers'
 import { Signer } from '@ethersproject/abstract-signer'
 
-import { Bytes, BigNumber, BigNumberish } from 'ethers'
+import { BigNumber, BigNumberish, Bytes, ethers } from 'ethers'
 import { ERC4337EthersProvider } from './ERC4337EthersProvider'
 import { ClientConfig } from './ClientConfig'
 import { HttpRpcClient } from './HttpRpcClient'
-import { UserOperationStruct } from './contracts/EntryPoint'
 import { BaseAccountAPI } from './BaseAccountAPI'
-import Debug from 'debug'
-
-const debug = Debug('aa.signer')
+import { UserOperation } from './utils/ERC4337Utils'
+import { getDummySignature } from './calcPreVerificationGas'
+import { IncentivAccount__factory } from './contracts/factories/IncentivAccount__factory'
+import { arrayify } from 'ethers/lib/utils'
 
 export interface BatchTransactionRequest {
   targets: string[]
@@ -39,73 +39,22 @@ export class ERC4337EthersSigner extends Signer {
   async sendTransaction (transaction: Deferrable<TransactionRequest>): Promise<TransactionResponse> {
     const tx: TransactionRequest = await this.populateTransaction(transaction)
     await this.verifyAllNecessaryFields(tx)
-
-    // Check if gasLimit was explicitly set in the original transaction
-    const originalGasLimit = (transaction as any).gasLimit
-    const isGasLimitExplicit = originalGasLimit !== undefined && originalGasLimit !== null
-
-    debug('Gas limit details: %o', {
-      originalGasLimit: originalGasLimit?.toString() ?? 'not set',
-      populatedGasLimit: tx.gasLimit?.toString() ?? 'not set',
-      isExplicitlySet: isGasLimitExplicit
-    })
-
-    // Only pass gasLimit if it was explicitly set in the original transaction
-    const userOpDetails = {
+    const userOperation = await this.smartAccountAPI.createSignedUserOp({
       target: tx.to ?? '',
       data: tx.data?.toString() ?? '',
       value: tx.value,
-      ...(isGasLimitExplicit && { gasLimit: tx.gasLimit })
-    }
-
-    debug('Creating UserOp with details: %o', {
-      target: userOpDetails.target,
-      hasData: !!userOpDetails.data && userOpDetails.data !== '0x',
-      hasValue: !!userOpDetails.value && userOpDetails.value !== '0x',
-      gasLimitIncluded: 'gasLimit' in userOpDetails
+      gasLimit: tx.gasLimit,
+      maxFeePerGas: tx.maxFeePerGas || undefined,
+      maxPriorityFeePerGas: tx.maxPriorityFeePerGas || undefined
     })
-
-    const userOperation = await this.smartAccountAPI.createSignedUserOp(userOpDetails)
     const transactionResponse = await this.erc4337provider.constructUserOpTransactionResponse(userOperation)
     try {
       await this.httpRpcClient.sendUserOpToBundler(userOperation)
     } catch (error: any) {
-      // console.error('sendUserOpToBundler failed', error)
       throw this.unwrapError(error)
     }
     // TODO: handle errors - transaction that is "rejected" by bundler is _not likely_ to ever resolve its "wait()"
     return transactionResponse
-  }
-
-  unwrapError (errorIn: any): Error {
-    if (errorIn.body != null) {
-      const errorBody = JSON.parse(errorIn.body)
-      let paymasterInfo: string = ''
-      let failedOpMessage: string | undefined = errorBody?.error?.message
-      if (failedOpMessage?.includes('FailedOp') === true) {
-        // TODO: better error extraction methods will be needed
-        const matched = failedOpMessage.match(/FailedOp\((.*)\)/)
-        if (matched != null) {
-          const split = matched[1].split(',')
-          paymasterInfo = `(paymaster address: ${split[1]})`
-          failedOpMessage = split[2]
-        }
-      }
-      const error = new Error(`The bundler has failed to include UserOperation in a batch: ${failedOpMessage} ${paymasterInfo})`)
-      error.stack = errorIn.stack
-      return error
-    }
-    return errorIn
-  }
-
-  async verifyAllNecessaryFields (transactionRequest: TransactionRequest): Promise<void> {
-    if (transactionRequest.to == null) {
-      throw new Error('Missing call target')
-    }
-    if (transactionRequest.data == null && transactionRequest.value == null) {
-      // TBD: banning no-op UserOps seems to make sense on provider level
-      throw new Error('Missing call data or value')
-    }
   }
 
   async verifyAllNecessaryBatchFields (batchRequest: BatchTransactionRequest): Promise<void> {
@@ -147,14 +96,184 @@ export class ERC4337EthersSigner extends Signer {
       maxPriorityFeePerGas: convertedRequest.maxPriorityFeePerGas
     }
 
-    const userOperation = await this.smartAccountAPI.createSignedBatchUserOp(userOpDetails)
-    const transactionResponse = await this.erc4337provider.constructUserOpTransactionResponse(userOperation)
     try {
+      const userOperation = await this.smartAccountAPI.createSignedBatchUserOp(userOpDetails)
+      const transactionResponse = await this.erc4337provider.constructUserOpTransactionResponse(userOperation)
       await this.httpRpcClient.sendUserOpToBundler(userOperation)
+      return transactionResponse
     } catch (error: any) {
+      console.error('sendUserOpToBundler failed', error)
       throw this.unwrapError(error)
     }
-    return transactionResponse
+    // return transactionResponse
+  }
+
+  async estimateUserOpGas(transaction: Deferrable<TransactionRequest>): Promise<{callGasLimit: number, preVerificationGas: number, verificationGasLimit: number, paymasterVerificationGasLimit: number}> {
+    const tx: TransactionRequest = await this.populateTransaction(transaction)
+    await this.verifyAllNecessaryFields(tx)
+    const callData = await this.smartAccountAPI.encodeExecute(
+      tx.to ?? '', 
+      tx.value ?? 0, 
+      tx.data?.toString() ?? ''
+    )
+    return await this.estimateCalldataGas(callData)
+  }
+
+  async estimateBatchUserOpGas(batchRequest: BatchTransactionRequest): Promise<{callGasLimit: number, preVerificationGas: number, verificationGasLimit: number, paymasterVerificationGasLimit: number}> {
+    await this.verifyAllNecessaryBatchFields(batchRequest)
+
+    const convertedRequest = {
+      targets: batchRequest.targets,
+      datas: batchRequest.datas.map(d => d || '0x'),
+      values: batchRequest.values.map(v => BigNumber.from(v || 0)),
+    }
+
+    const callData = await this.smartAccountAPI.encodeExecuteBatch(
+      convertedRequest.targets, 
+      convertedRequest.values,
+      convertedRequest.datas
+    )
+    return await this.estimateCalldataGas(callData)
+  }
+
+  /**
+   * Get the recovery address from the IncentivAccount contract
+   * @returns The recovery address
+   */
+  async getRecoveryAddress() {
+    if (!this.erc4337provider) return null;
+
+    // If it's not deployed yet, the recovery address is not set
+    if (await this.erc4337provider.smartAccountAPI.checkAccountPhantom())
+      return ethers.constants.AddressZero;
+
+    const incentivAccount = new ethers.Contract(
+      await this.erc4337provider.smartAccountAPI.getAccountAddress(),
+      IncentivAccount__factory.abi,
+      this.erc4337provider
+    );
+
+    return incentivAccount.recoveryAddress();
+  }
+
+  /**
+   * Set the recovery address in both IncentivAccount and AccountRecoveryMap simultaneously
+   * @dev The AccountRecoveryMap contract maps the recovery address to the account address
+   * @param recoveryAddress - The recovery address to set
+   * @param accountRecoveryMapAddress - The address of the AccountRecoveryMap contract
+   * @returns The transaction response
+   */
+  async setRecoveryAddress(recoveryAddress: string, accountRecoveryMapAddress: string) {
+    if (!this.erc4337provider) return null;
+
+    const incentivAccount = new ethers.Contract(
+      await this.erc4337provider.smartAccountAPI.getAccountAddress(),
+      IncentivAccount__factory.abi,
+      this.provider
+    );
+
+    // Encode setRecoveryAddress calldata for batch transaction in IncentivAccount and 
+    // AccountRecoveryMap. Both contracts have the same setRecoveryAddress function signature
+    const calldata = incentivAccount.interface.encodeFunctionData('setRecoveryAddress', [recoveryAddress]);
+    const batchCallRequest = {
+      targets: [
+        await this.erc4337provider.smartAccountAPI.getAccountAddress(),
+        accountRecoveryMapAddress
+      ],
+      datas: [
+        calldata,
+        calldata
+      ],
+      values: [
+        ethers.constants.Zero,
+        ethers.constants.Zero
+      ]
+    }
+
+    // Estimate the gas for the batch transaction
+    const gasEstimation = await this.estimateBatchUserOpGas(batchCallRequest);
+    const totalGas = BigNumber
+      .from(gasEstimation.callGasLimit)
+      .add(gasEstimation.verificationGasLimit)
+      .add(gasEstimation.preVerificationGas);
+
+    const feeData = await this.erc4337provider.getFeeData();
+
+    // Set recovery address in both IncentivAccount and AccountRecoveryMap simultaneously
+    return this.sendBatchTransaction({
+      ...batchCallRequest, 
+      gasLimit: totalGas,
+      maxFeePerGas: feeData.maxFeePerGas ?? undefined,
+      maxPriorityFeePerGas: feeData.maxPriorityFeePerGas ?? undefined
+    });
+  }
+
+  /**
+   * Get the account address from the AccountRecoveryMap contract
+   * @param address - The recovery address
+   * @param accountRecoveryMapAddress - The address of the AccountRecoveryMap contract
+   * @returns The account address
+   */
+  async getAccountForRecoveryAddress(address: string, accountRecoveryMapAddress: string) {
+    if (!this.erc4337provider) return null;
+
+    const accountRecoveryMap = new ethers.Contract(
+      accountRecoveryMapAddress,
+      IncentivAccount__factory.abi,
+      this.erc4337provider
+    );
+    return accountRecoveryMap.recoveryToAccount(address);
+  }
+
+  async estimateCalldataGas(callData: string): Promise<{callGasLimit: number, preVerificationGas: number, verificationGasLimit: number, paymasterVerificationGasLimit: number}> {   
+    const factoryParams = await this.smartAccountAPI.getRequiredFactoryData()
+    // const initGas = await this.smartAccountAPI.estimateCreationGas(factoryParams)
+    // const verificationGasLimit = BigNumber.from(await this.smartAccountAPI.getVerificationGasLimit()).add(initGas)
+    const paymasterData = await this.smartAccountAPI.paymasterAPI?.getPaymasterData({})
+
+    const partialUserOp = {
+      sender: await this.smartAccountAPI.getAccountAddress(),
+      nonce: await this.smartAccountAPI.getNonce(),
+      factory: factoryParams?.factory ?? undefined,
+      factoryData: Buffer.from(arrayify(factoryParams?.factoryData ?? '0x')).toString('hex') || undefined,
+      paymaster: paymasterData?.paymaster || undefined,
+      paymasterData: paymasterData?.paymasterData || undefined,
+      callData,
+      signature: getDummySignature(this.smartAccountAPI.getSignatureMode())
+    }
+
+    return await this.httpRpcClient.estimateUserOpGas(partialUserOp)
+  }
+
+  unwrapError (errorIn: any): Error {
+    if (errorIn.body != null) {
+      const errorBody = JSON.parse(errorIn.body)
+      let paymasterInfo: string = ''
+      let failedOpMessage: string | undefined = errorBody?.error?.message
+      if (failedOpMessage?.includes('FailedOp') === true) {
+        // TODO: better error extraction methods will be needed
+        const matched = failedOpMessage.match(/FailedOp\((.*)\)/)
+        if (matched != null) {
+          const split = matched[1].split(',')
+          paymasterInfo = `(paymaster address: ${split[1]})`
+          failedOpMessage = split[2]
+        }
+      }
+      const error = new Error(`The bundler has failed to include UserOperation in a batch: ${failedOpMessage} ${paymasterInfo})`)
+      error.stack = errorIn.stack
+      return error
+    }
+    return errorIn
+  }
+
+  async verifyAllNecessaryFields (transactionRequest: TransactionRequest): Promise<void> {
+    if (transactionRequest.to == null) {
+      throw new Error('Missing call target')
+    }
+    if (transactionRequest.data == null && transactionRequest.value == null) {
+      // TBD: banning no-op UserOps seems to make sense on provider level
+      throw new Error('Missing call data or value')
+    }
   }
 
   connect (provider: Provider): Signer {
@@ -176,7 +295,7 @@ export class ERC4337EthersSigner extends Signer {
     throw new Error('not implemented')
   }
 
-  async signUserOperation (userOperation: UserOperationStruct): Promise<string> {
+  async signUserOperation (userOperation: UserOperation): Promise<string> {
     const message = await this.smartAccountAPI.getUserOpHash(userOperation)
     return await this.originalSigner.signMessage(message)
   }
